@@ -1,83 +1,98 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
-<meta charset="UTF-8">
-<title>Instant Doctor Console</title>
-<style>
-  body { font-family: Arial, sans-serif; background:#f4f7fb; text-align:center; padding-top:20px;}
-  video { width:320px; height:240px; background:#000; margin:10px; border-radius:10px;}
-  #status { color:green; font-weight:bold; margin-top:15px;}
-  .container { display:flex; justify-content:center; align-items:center; gap:20px;}
-</style>
+  <meta charset="UTF-8" />
+  <title>Doctor Console</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
+    video { width: 40%; border: 2px solid #fff; margin: 10px; }
+    button { padding: 10px 20px; margin: 5px; font-size: 16px; border-radius: 6px; }
+  </style>
 </head>
 <body>
   <h2>👩‍⚕️ Doctor Video Console</h2>
-  <div class="container">
-    <video id="local" autoplay playsinline muted></video>
-    <video id="remote" autoplay playsinline></video>
-  </div>
-  <div id="status">Waiting for patient connection...</div>
+  <video id="localVideo" autoplay muted></video>
+  <video id="remoteVideo" autoplay></video><br>
+  <button id="btnAnswer" disabled>接听</button>
+  <button id="btnHangup" disabled>挂断</button>
 
-<script>
-  const doctorId = "doctor1";
-  const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
-  const ws = new WebSocket(wsURL);
+  <script>
+    const wsUrl = "wss://parentdoctorserver.onrender.com/ws";
+    const ws = new WebSocket(wsUrl);
+    let pc, currentCaller = null, localStream;
 
-  ws.addEventListener("open", () => {
-    ws.send(JSON.stringify({ type: "register", id: doctorId }));
-    console.log("✅ WS connected:", wsURL);
-  });
+    ws.onopen = () => {
+      console.log("✅ WebSocket connected");
+      ws.send(JSON.stringify({ type: "register", role: "doctor", id: "doctor" }));
+    };
 
-  const pc = new RTCPeerConnection({
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-  });
+    ws.onmessage = async (event) => {
+      const msg = JSON.parse(event.data);
+      console.log("📩 Received:", msg);
 
-  const localVideo = document.getElementById("local");
-  const remoteVideo = document.getElementById("remote");
+      if (msg.type === "signal" && msg.payload?.type === "offer") {
+        currentCaller = msg.from;
+        document.getElementById("btnAnswer").disabled = false;
+        alert("📞 有一个来电！点击“接听”开始视频通话");
+        window.offer = msg.payload;
+      }
 
-  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(stream => {
-      localVideo.srcObject = stream;
-      stream.getTracks().forEach(t => pc.addTrack(t, stream));
-    })
-    .catch(err => alert("Camera access failed: " + err));
+      if (msg.type === "signal" && msg.payload?.type === "candidate" && pc) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(msg.payload.candidate));
+        } catch (err) {
+          console.warn("⚠️ addIceCandidate error", err);
+        }
+      }
+    };
 
-  pc.ontrack = e => {
-    remoteVideo.srcObject = e.streams[0];
-  };
+    document.getElementById("btnAnswer").onclick = async () => {
+      document.getElementById("btnAnswer").disabled = true;
+      document.getElementById("btnHangup").disabled = false;
+      await startAnswer();
+    };
 
-  pc.onicecandidate = e => {
-    if (e.candidate) {
-      ws.send(JSON.stringify({
-        type: "signal",
-        from: doctorId,
-        to: "parent",
-        payload: { candidate: e.candidate }
-      }));
-    }
-  };
+    document.getElementById("btnHangup").onclick = () => {
+      if (pc) pc.close();
+      document.getElementById("btnHangup").disabled = true;
+      alert("🛑 通话结束");
+    };
 
-  ws.onmessage = async (event) => {
-    const msg = JSON.parse(event.data);
-    console.log("📨", msg);
+    async function startAnswer() {
+      pc = new RTCPeerConnection();
 
-    if (msg.type !== "signal" || msg.to !== doctorId || !msg.payload) return;
+      pc.onicecandidate = e => {
+        if (e.candidate && currentCaller) {
+          ws.send(JSON.stringify({
+            type: "signal",
+            from: "doctor",
+            to: currentCaller,
+            payload: { type: "candidate", candidate: e.candidate }
+          }));
+        }
+      };
 
-    if (msg.payload.offer) {
-      await pc.setRemoteDescription(new RTCSessionDescription(msg.payload.offer));
+      pc.ontrack = e => {
+        document.getElementById("remoteVideo").srcObject = e.streams[0];
+      };
+
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      document.getElementById("localVideo").srcObject = localStream;
+
+      await pc.setRemoteDescription(new RTCSessionDescription(window.offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+
       ws.send(JSON.stringify({
         type: "signal",
-        from: doctorId,
-        to: msg.from,
-        payload: { answer }
+        from: "doctor",
+        to: currentCaller,
+        payload: { type: "answer", sdp: answer.sdp }
       }));
-      document.getElementById("status").innerText = "🟢 Connected to patient!";
-    } else if (msg.payload.candidate) {
-      await pc.addIceCandidate(new RTCIceCandidate(msg.payload.candidate));
+
+      console.log("✅ Sent answer to:", currentCaller);
     }
-  };
-</script>
+  </script>
 </body>
 </html>
