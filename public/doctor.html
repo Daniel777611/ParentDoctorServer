@@ -1,98 +1,215 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh">
 <head>
-  <meta charset="UTF-8" />
-  <title>Doctor Console</title>
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  />
+  <title>Doctor Video Console</title>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #111; color: #fff; }
-    video { width: 40%; border: 2px solid #fff; margin: 10px; }
-    button { padding: 10px 20px; margin: 5px; font-size: 16px; border-radius: 6px; }
+    :root { color-scheme: light dark; }
+    body { margin:0; background:#111; color:#eee; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial; }
+    h1 { text-align:center; font-weight:700; padding:20px 10px; }
+    .wrap { max-width:1200px; margin:0 auto; padding:16px; }
+    .grid {
+      display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:center;
+    }
+    video {
+      width:100%; height:420px; background:#000; border:2px solid #666; border-radius:10px; object-fit:cover;
+    }
+    .btns { display:flex; gap:12px; margin-top:16px; }
+    button {
+      padding:12px 18px; border-radius:10px; border:none; cursor:pointer; font-size:16px; font-weight:700;
+    }
+    .accept { background:#239b56; color:#fff; }
+    .hangup { background:#d32f2f; color:#fff; }
+    .log { margin-top:14px; background:#0d0d0d; border:1px solid #333; border-radius:8px; padding:12px; height:160px; overflow:auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+    .muted { opacity:.7 }
   </style>
 </head>
 <body>
-  <h2>👩‍⚕️ Doctor Video Console</h2>
-  <video id="localVideo" autoplay muted></video>
-  <video id="remoteVideo" autoplay></video><br>
-  <button id="btnAnswer" disabled>接听</button>
-  <button id="btnHangup" disabled>挂断</button>
+  <h1>🧑‍⚕️ Doctor Video Console</h1>
 
-  <script>
-    const wsUrl = "wss://parentdoctorserver.onrender.com/ws";
-    const ws = new WebSocket(wsUrl);
-    let pc, currentCaller = null, localStream;
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <video id="local" autoplay playsinline muted class="muted"></video>
+      </div>
+      <div>
+        <video id="remote" autoplay playsinline></video>
+      </div>
+    </div>
 
-    ws.onopen = () => {
-      console.log("✅ WebSocket connected");
-      ws.send(JSON.stringify({ type: "register", role: "doctor", id: "doctor" }));
+    <div class="btns">
+      <button id="accept" class="accept" disabled>接听</button>
+      <button id="hangup" class="hangup" disabled>挂断</button>
+    </div>
+
+    <div id="log" class="log"></div>
+  </div>
+
+<script>
+(() => {
+  /** ---------- 基础 ---------- */
+  const logBox = document.getElementById('log');
+  const log = (...args) => {
+    const line = args.map(x => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ');
+    const p = document.createElement('div');
+    p.textContent = line;
+    logBox.appendChild(p);
+    logBox.scrollTop = logBox.scrollHeight;
+    console.log('[doctor]', ...args);
+  };
+
+  const localVideo = document.getElementById('local');
+  const remoteVideo = document.getElementById('remote');
+  const btnAccept = document.getElementById('accept');
+  const btnHangup = document.getElementById('hangup');
+
+  const wsURL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  const myId = 'doctor';             // 医生端固定 ID
+  const parentId = 'parent';         // iOS 端固定 ID（与 App 里保持一致）
+
+  /** ---------- WebSocket ---------- */
+  let ws;
+  let pc;
+  let localStream;
+
+  function wsSend(obj) {
+    ws?.send(JSON.stringify(obj));
+  }
+
+  function ensurePC() {
+    if (pc) return pc;
+
+    const cfg = {
+      iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }]
     };
+    pc = new RTCPeerConnection(cfg);
 
-    ws.onmessage = async (event) => {
-      const msg = JSON.parse(event.data);
-      console.log("📩 Received:", msg);
-
-      if (msg.type === "signal" && msg.payload?.type === "offer") {
-        currentCaller = msg.from;
-        document.getElementById("btnAnswer").disabled = false;
-        alert("📞 有一个来电！点击“接听”开始视频通话");
-        window.offer = msg.payload;
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate) {
+        wsSend({
+          type: 'signal',
+          from: myId,
+          to: parentId,
+          payload: {
+            candidate: ev.candidate.candidate,
+            sdpMLineIndex: ev.candidate.sdpMLineIndex,
+            sdpMid: ev.candidate.sdpMid
+          }
+        });
       }
+    };
 
-      if (msg.type === "signal" && msg.payload?.type === "candidate" && pc) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(msg.payload.candidate));
-        } catch (err) {
-          console.warn("⚠️ addIceCandidate error", err);
-        }
+    pc.ontrack = (ev) => {
+      log('📥 ontrack:', ev.track.kind);
+      // 远端视频/音频 track
+      if (ev.streams && ev.streams[0]) {
+        remoteVideo.srcObject = ev.streams[0];
+      } else {
+        // Fallback：组装 MediaStream
+        const ms = new MediaStream();
+        ms.addTrack(ev.track);
+        remoteVideo.srcObject = ms;
       }
     };
 
-    document.getElementById("btnAnswer").onclick = async () => {
-      document.getElementById("btnAnswer").disabled = true;
-      document.getElementById("btnHangup").disabled = false;
-      await startAnswer();
-    };
+    pc.onconnectionstatechange = () => log('🔗 pc state =', pc.connectionState);
+    pc.onsignalingstatechange = () => log('🗂 signaling =', pc.signalingState);
+    return pc;
+  }
 
-    document.getElementById("btnHangup").onclick = () => {
-      if (pc) pc.close();
-      document.getElementById("btnHangup").disabled = true;
-      alert("🛑 通话结束");
-    };
+  async function openLocal() {
+    if (localStream) return localStream;
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
 
-    async function startAnswer() {
-      pc = new RTCPeerConnection();
+    const pc = ensurePC();
+    // Unified Plan: addTrack
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    return localStream;
+  }
 
-      pc.onicecandidate = e => {
-        if (e.candidate && currentCaller) {
-          ws.send(JSON.stringify({
-            type: "signal",
-            from: "doctor",
-            to: currentCaller,
-            payload: { type: "candidate", candidate: e.candidate }
-          }));
-        }
-      };
+  async function handleOffer(offer) {
+    await openLocal();
+    const pc = ensurePC();
 
-      pc.ontrack = e => {
-        document.getElementById("remoteVideo").srcObject = e.streams[0];
-      };
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    log('✅ setRemoteDescription(offer) done');
 
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-      document.getElementById("localVideo").srcObject = localStream;
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    log('✅ createAnswer + setLocalDescription done');
 
-      await pc.setRemoteDescription(new RTCSessionDescription(window.offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+    wsSend({
+      type: 'signal',
+      from: myId,
+      to: parentId,
+      payload: { type: 'answer', sdp: answer.sdp }
+    });
 
-      ws.send(JSON.stringify({
-        type: "signal",
-        from: "doctor",
-        to: currentCaller,
-        payload: { type: "answer", sdp: answer.sdp }
-      }));
+    btnHangup.disabled = false;
+  }
 
-      console.log("✅ Sent answer to:", currentCaller);
+  function handleCandidate(payload) {
+    const ice = new RTCIceCandidate({
+      candidate: payload.candidate,
+      sdpMLineIndex: payload.sdpMLineIndex,
+      sdpMid: payload.sdpMid
+    });
+    ensurePC().addIceCandidate(ice).catch(e => log('addIceCandidate error:', e));
+  }
+
+  function hangup() {
+    if (pc) {
+      pc.getSenders().forEach(s => s.track && s.track.stop());
+      pc.getReceivers().forEach(r => r.track && r.track.stop());
+      pc.close();
     }
-  </script>
+    pc = null;
+    remoteVideo.srcObject = null;
+    btnHangup.disabled = true;
+    log('👋 hangup');
+  }
+
+  /** ---------- 事件 ---------- */
+  btnAccept.onclick = async () => {
+    btnAccept.disabled = true;    // 点击后等 Offer 下发，通过 WS 收到 Offer 才会继续
+    await openLocal();
+    log('✅ Local stream ready, waiting for Offer...');
+  };
+
+  btnHangup.onclick = hangup;
+
+  /** ---------- 连接 WS ---------- */
+  ws = new WebSocket(wsURL);
+  ws.onopen = () => {
+    log('🔌 WS connected:', wsURL);
+    wsSend({ type: 'register', id: myId });
+    btnAccept.disabled = false;
+  };
+  ws.onclose = () => log('🔌 WS closed');
+  ws.onerror = (e) => log('❌ WS error', e);
+
+  ws.onmessage = async (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type !== 'signal' || msg.to !== myId) return;
+
+    const p = msg.payload || {};
+    if (p.type === 'offer') {
+      log('📨 offer received');
+      await handleOffer({ type: 'offer', sdp: p.sdp });
+    } else if (p.type === 'answer') {
+      // 一般医生端不会收到 answer，这里保留以便互拨
+      log('📨 answer (ignored on doctor)');
+    } else if (p.candidate) {
+      handleCandidate(p);
+    }
+  };
+})();
+</script>
 </body>
 </html>
