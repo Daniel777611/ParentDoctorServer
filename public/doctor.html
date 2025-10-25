@@ -67,13 +67,12 @@ let ws, pc, localStream, remoteStream;
 let localMeter = null, remoteMeter = null;
 let pendingOffer = null;
 let remoteDescSet = false;
-const pendingRemoteCandidates = []; // ✅ 远端 ICE 排队
+const pendingRemoteCandidates = []; // 远端 ICE 排队
 
 const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
 const rtcConfig = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
-    // ✅ TURN（仅测试用途；请换成你自己的服务）
     { urls: "turn:global.relay.metered.ca:80", username: "open", credential: "open" },
     { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "open", credential: "open" },
     { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "open", credential: "open" }
@@ -168,7 +167,7 @@ function connectWS(){
   if (ws) try { ws.close(); } catch {}
   ws = new WebSocket(wsURL);
   ws.onopen = ()=>{
-    ws.send(JSON.stringify({type:"register", id:"doctor"}));
+    ws.send(JSON.stringify({type:"register", id:"doctor"})); // 固定 doctor
     log("🔌 WS connected: "+wsURL);
   };
   ws.onmessage = async (ev)=>{
@@ -176,7 +175,7 @@ function connectWS(){
     if (msg.type !== "signal") return;
     const p = msg.payload || {};
 
-    // Offer 到达 → 允许接听
+    // Offer 到达 → 启用“接听”
     if (p.offer) {
       pendingOffer = p.offer.sdp;
       $("#btnAccept").disabled = false;
@@ -184,13 +183,13 @@ function connectWS(){
       return;
     }
 
-    // 远端 ICE
+    // 远端 ICE：若尚未设置 remoteDescription，先排队
     if (p.candidate) {
       if (!remoteDescSet) {
         pendingRemoteCandidates.push(p.candidate);
         log("🧊 queued remote candidate");
       } else {
-        try { await pc.addIceCandidate(new RTCIceCandidate(p.candidate)); }
+        try { await pc.addIceCandidate(new RTCiceCandidate(p.candidate)); }
         catch(e){ log("❌ addIceCandidate error: " + e.message); }
       }
       return;
@@ -206,10 +205,10 @@ async function acceptCall(){
 
   try{
     await pc.setRemoteDescription({type:"offer", sdp: pendingOffer});
-    remoteDescSet = true;                        // ✅ 标记已设置
+    remoteDescSet = true;
     log("📥 setRemoteDescription(offer)");
 
-    // 先把排队的 ICE 全部加进去
+    // 把排队的远端 ICE 全部补加
     while (pendingRemoteCandidates.length) {
       const c = pendingRemoteCandidates.shift();
       try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
@@ -244,8 +243,8 @@ $("#btnStart").onclick = startLocal;
 $("#btnAccept").onclick = acceptCall;
 $("#btnHangup").onclick = hangup;
 
+// 初始：仅连接 WS，待有 Offer 才接听
 connectWS();
-startLocal();
 </script>
 </body>
 </html>
