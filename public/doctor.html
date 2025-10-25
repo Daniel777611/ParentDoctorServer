@@ -40,7 +40,7 @@
 
 <script>
 (async () => {
-  // === 可选：自动接听（true=自动，false=需点“接听”） ===
+  // === 可选：自动接听（true=自动接听，false=需点击“接听”） ===
   const AUTO_ANSWER = false;
 
   const $local  = document.getElementById('local');
@@ -88,7 +88,6 @@
     };
 
     _pc.ontrack = (ev) => {
-      // 这里可能收到多个 track，把第一个视频轨显示出来
       if ($remote.srcObject !== ev.streams[0]) {
         $remote.srcObject = ev.streams[0];
         $remote.play().catch(()=>{});
@@ -100,11 +99,14 @@
   }
 
   async function startLocalMedia() {
-    // 申请本地媒体并预览；为避免 autoplay 被拦截，local video 已设 muted + playsinline
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    $local.srcObject = localStream;
-    await $local.play().catch(()=>{});
-    log('🎥 Local stream ready, waiting for Offer…');
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      $local.srcObject = localStream;
+      await $local.play().catch(()=>{});
+      log('🎥 Local stream ready, waiting for Offer…');
+    } catch (err) {
+      log('⚠️ Camera/mic access denied:', err.message || err);
+    }
   }
 
   async function ensurePC() {
@@ -120,22 +122,13 @@
 
   async function acceptOffer(offer) {
     const pc = await ensurePC();
-    // 兼容两种 payload 形态
-    const desc = typeof offer.sdp === 'string'
-      ? { type: 'offer', sdp: offer.sdp }
-      : offer; // 如果就是一个 RTCSessionDescriptionInit
-
+    const desc = { type: 'offer', sdp: offer.sdp };
     await pc.setRemoteDescription(desc);
     log('✅ setRemoteDescription(offer)');
 
-    // 把早到的候选补喂进去
     while (pendingCandidates.length) {
       const c = pendingCandidates.shift();
-      try {
-        await pc.addIceCandidate(c);
-      } catch (e) {
-        log('addIceCandidate (queued) error:', e.message || e);
-      }
+      try { await pc.addIceCandidate(c); } catch (e) { log('⚠️ addQueuedCandidate error:', e.message || e); }
     }
 
     const answer = await pc.createAnswer();
@@ -156,19 +149,23 @@
       sdpMLineIndex: payload.sdpMLineIndex
     };
     if (!pc || !pc.remoteDescription) {
-      pendingCandidates.push(candInit); // 先存着
+      pendingCandidates.push(candInit);
       return;
     }
     try {
       await pc.addIceCandidate(candInit);
       log('✅ ICE Candidate added');
     } catch (e) {
-      log('addIceCandidate error:', e.message || e);
+      log('⚠️ addIceCandidate error:', e.message || e);
     }
   }
 
   function wsSend(obj) {
-    try { ws.readyState === 1 && ws.send(JSON.stringify(obj)); } catch {}
+    try {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+    } catch (e) {
+      log('⚠️ WS send error:', e.message || e);
+    }
   }
 
   // ---- UI ----
@@ -192,29 +189,21 @@
   ws.onopen = async () => {
     log(`🔌 WS connected: ${wsUrl}`);
     wsSend({ type:'register', id:'doctor' });
-    // 尽早起本地预览
-    try { await startLocalMedia(); } catch (e) {
-      log('⚠️ getUserMedia failed:', e.message || e);
-    }
+    await startLocalMedia();
   };
 
   ws.onmessage = async (ev) => {
     let msg;
     try { msg = JSON.parse(ev.data); } catch { return; }
 
-    // 兼容两种风格：1) 包了 payload 的 signal；2) 直接 offer/candidate
+    // ✅ 兼容两种风格：1) 包了 payload 的 signal；2) 直接 offer/candidate
     if (msg.type === 'signal') {
       const p = msg.payload || {};
       if (p.type === 'offer' || p.sdp) {
-        haveOffer = { type: 'offer', sdp: p.sdp || p.offer?.sdp || p.sdpStr };
-        log('📥 Offer received');
-        if (AUTO_ANSWER) {
-          await acceptOffer(haveOffer);
-          haveOffer = null;
-        } else {
-          $answer.disabled = false;
-          log('👉 点击 [接听] 开始通话');
-        }
+        haveOffer = { type: 'offer', sdp: p.sdp || p.offer?.sdp };
+        log('📥 Offer received from parent');
+        if (AUTO_ANSWER) { await acceptOffer(haveOffer); haveOffer = null; }
+        else { $answer.disabled = false; log('👉 点击 [接听] 开始通话'); }
       } else if (p.type === 'candidate' && p.candidate) {
         await addRemoteCandidate(p);
       } else if (p.type === 'hangup') {
@@ -223,11 +212,12 @@
       return;
     }
 
-    // 老格式：直接下发
+    // ✅ 老格式：直接下发
     if (msg.type === 'offer' || msg.sdp) {
       haveOffer = { type: 'offer', sdp: msg.sdp || msg.offer?.sdp };
       log('📥 Offer received (legacy)');
-      if (AUTO_ANSWER) { await acceptOffer(haveOffer); haveOffer = null; } else { $answer.disabled = false; }
+      if (AUTO_ANSWER) { await acceptOffer(haveOffer); haveOffer = null; }
+      else { $answer.disabled = false; log('👉 点击 [接听] 开始通话'); }
     } else if (msg.type === 'candidate') {
       await addRemoteCandidate(msg);
     }
