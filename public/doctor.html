@@ -15,25 +15,27 @@
     .btn{padding:10px 16px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
     .btn.green{background:var(--ok);color:#fff}
     .btn.red{background:var(--warn);color:#fff}
-    .log{height:200px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas;background:#0b0c0f;border-radius:10px;padding:10px;color:#cbd5e1}
-    .meter{height:10px;background:#1f2430;border-radius:999px;overflow:hidden}
-    .bar{height:100%;width:8%;background:linear-gradient(90deg,#22c55e,#eab308 70%,#ef4444);transition:width .06s linear}
+    .log{height:220px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas;background:#0b0c0f;border-radius:10px;padding:10px;color:#cbd5e1}
+    .meter{height:10px;background:#1f2430;border-radius:999px;overflow:hidden;flex:1}
+    .bar{height:100%;width:0%;background:linear-gradient(90deg,#22c55e,#eab308 70%,#ef4444);transition:width .06s linear}
     .label{min-width:92px;color:#9aa0a6;font-size:12px}
-    select.btn{padding:8px 10px}
+    select.btn{padding:8px 10px;background:#222;color:#fff}
+    .hint{color:#9aa0a6;font-size:12px;margin-top:8px}
   </style>
 </head>
 <body>
 <div class="wrap">
   <h1>👩‍⚕️ Doctor Video Console</h1>
   <div class="grid">
+    <!-- 左：本地 -->
     <div>
       <video id="localVideo" autoplay playsinline muted></video>
       <div class="panel">
         <div class="row" style="margin-bottom:8px">
           <span class="label">本地麦克风</span>
-          <div class="meter" style="flex:1"><div id="localBar" class="bar"></div></div>
+          <div class="meter"><div id="localBar" class="bar"></div></div>
         </div>
-        <div class="row" style="margin-bottom:6px">
+        <div class="row" style="margin-bottom:8px">
           <span class="label">本地摄像头</span>
           <button id="btnStart" class="btn">启用设备</button>
         </div>
@@ -44,23 +46,27 @@
       </div>
     </div>
 
+    <!-- 右：远端 -->
     <div>
       <video id="remoteVideo" autoplay playsinline></video>
+      <!-- 独立音频节点：更稳定的远端声音播放 & 可切换输出设备 -->
+      <audio id="remoteAudio" autoplay></audio>
+
       <div class="panel">
         <div class="row" style="margin-bottom:8px">
-          <span class="label">远端麦克风</span>
-          <div class="meter" style="flex:1"><div id="remoteBar" class="bar"></div></div>
+          <span class="label">扬声器电平</span>
+          <div class="meter"><div id="remoteBar" class="bar"></div></div>
         </div>
 
-        <!-- 输出设备选择（需要 HTTPS；Chrome/Edge 支持 setSinkId） -->
-        <div class="row" style="margin-bottom:6px">
+        <div class="row" style="margin-bottom:8px">
           <span class="label">输出设备</span>
-          <select id="outSel" class="btn" style="background:#222;color:#fff"></select>
+          <select id="outSel" class="btn"></select>
+          <button id="btnTestBeep" class="btn">测试响铃</button>
         </div>
 
         <div class="log" id="log"></div>
-        <div style="color:#9aa0a6;font-size:12px;margin-top:8px">
-          若黑屏/卡顿/无声：检查浏览器相机与麦克风权限；确保未静音标签；公司网络可能限制 UDP/TCP 443。
+        <div class="hint">
+          若黑屏/卡顿/无声：检查浏览器相机与麦克风权限；确保标签页未被静音；首次需点击按钮以解锁音频；公司网络可能屏蔽 UDP（已内置 TURN 走 443）。
         </div>
       </div>
     </div>
@@ -73,11 +79,9 @@ const log = (t)=>{ const el=$("#log"); el.innerHTML += t+"<br/>"; el.scrollTop=e
 
 // ---- State
 let ws, pc, localStream, remoteStream;
-let localMeter = null, remoteMeter = null;
-let pendingOffer = null;
-let remoteDescSet = false;
+let localCtx=null, remoteCtx=null, localAnalyser=null, remoteAnalyser=null;
+let pendingOffer = null, remoteDescSet = false;
 const pendingRemoteCandidates = [];
-let outSelEl = null;
 
 // ---- Config
 const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
@@ -89,6 +93,17 @@ const rtcConfig = {
     { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "open", credential: "open" }
   ]
 };
+
+// ---- UI refs
+const btnStart = $("#btnStart");
+const btnAccept = $("#btnAccept");
+const btnHangup = $("#btnHangup");
+const outSel = $("#outSel");
+const vLocal = $("#localVideo");
+const vRemote = $("#remoteVideo");
+const aRemote = $("#remoteAudio");
+const barLocal = $("#localBar");
+const barRemote = $("#remoteBar");
 
 // ---- Peer
 function ensurePeer() {
@@ -107,21 +122,21 @@ function ensurePeer() {
   pc.ontrack = (e)=>{
     if (!remoteStream) {
       remoteStream = new MediaStream();
-      const v = $("#remoteVideo");
-      v.srcObject = remoteStream;
-      v.muted = false;           // ✅ 不静音
-      v.volume = 1.0;
-      v.autoplay = true;
-      v.playsInline = true;
-      v.play().catch(()=>{});    // ✅ 强制播放
+      // 视频展示
+      vRemote.srcObject = remoteStream;
+      vRemote.muted = false;
+      vRemote.volume = 1.0;
+      // 音频播放（更稳）
+      aRemote.srcObject = remoteStream;
+      aRemote.volume = 1.0;
+      // 建立扬声器 VU
       setupRemoteMeter(remoteStream);
+      forcePlay();
     }
     remoteStream.addTrack(e.track);
   };
 
-  pc.onconnectionstatechange = ()=>{
-    log("🔗 PC state: " + pc.connectionState);
-  };
+  pc.onconnectionstatechange = ()=> log("🔗 PC state: " + pc.connectionState);
 }
 
 // ---- Local media
@@ -132,20 +147,19 @@ async function startLocal() {
       video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30,max:30} },
       audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true }
     });
-    $("#localVideo").srcObject = localStream;
+    vLocal.srcObject = localStream;
     setupLocalMeter(localStream);
+
     ensurePeer();
     for (const t of localStream.getTracks()) {
       const sender = pc.addTrack(t, localStream);
-      // 控制网页端上行码率（避免拥塞）
       if (t.kind === "video" && sender.getParameters) {
-        const p = sender.getParameters();
-        p.encodings = p.encodings || [{}];
+        const p = sender.getParameters(); p.encodings = p.encodings || [{}];
         p.encodings[0].maxBitrate = 1_200_000; // ~1.2Mbps
-        sender.setParameters(p).catch(()=>{});
+        try { await sender.setParameters(p); } catch {}
       }
     }
-    $("#btnStart").disabled = true;
+    btnStart.disabled = true;
     log("🎥 Local stream ready.");
   } catch(err){
     log("❌ getUserMedia error: " + err.message);
@@ -154,37 +168,33 @@ async function startLocal() {
 }
 
 function setupLocalMeter(stream){
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const src = ctx.createMediaStreamSource(stream);
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 1024; src.connect(analyser);
-  const bar = $("#localBar");
+  localCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = localCtx.createMediaStreamSource(stream);
+  localAnalyser = localCtx.createAnalyser();
+  localAnalyser.fftSize = 1024; src.connect(localAnalyser);
   (function tick(){
-    const buf = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(buf);
+    const buf = new Float32Array(localAnalyser.fftSize);
+    localAnalyser.getFloatTimeDomainData(buf);
     let sum=0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
     const rms = Math.sqrt(sum/buf.length);
-    bar.style.width = (Math.min(1, rms*4)*100).toFixed(1)+"%";
+    barLocal.style.width = (Math.min(1, rms*4)*100).toFixed(1)+"%";
     requestAnimationFrame(tick);
   })();
-  localMeter = {ctx, analyser};
 }
 
-function setupRemoteMeter(rStream){
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const src = ctx.createMediaStreamSource(rStream);
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 1024; src.connect(analyser);
-  const bar = $("#remoteBar");
+function setupRemoteMeter(stream){
+  remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = remoteCtx.createMediaStreamSource(stream);
+  remoteAnalyser = remoteCtx.createAnalyser();
+  remoteAnalyser.fftSize = 1024; src.connect(remoteAnalyser);
   (function tick(){
-    const buf = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(buf);
+    const buf = new Float32Array(remoteAnalyser.fftSize);
+    remoteAnalyser.getFloatTimeDomainData(buf);
     let sum=0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
     const rms = Math.sqrt(sum/buf.length);
-    bar.style.width = (Math.min(1, rms*4)*100).toFixed(1)+"%";
+    barRemote.style.width = (Math.min(1, rms*4)*100).toFixed(1)+"%";
     requestAnimationFrame(tick);
   })();
-  remoteMeter = {ctx, analyser};
 }
 
 // ---- WebSocket
@@ -202,7 +212,7 @@ function connectWS(){
 
     if (p.offer) {
       pendingOffer = p.offer.sdp;
-      $("#btnAccept").disabled = false;
+      btnAccept.disabled = false;
       log("📩 Offer received from parent");
       return;
     }
@@ -213,7 +223,7 @@ function connectWS(){
         log("🧊 queued remote candidate");
       } else {
         try { await pc.addIceCandidate(new RTCIceCandidate(p.candidate)); }
-        catch(e){ log("❌ addIceCandidate error: " + e.message); }
+        catch(e){ log("❌ addIceCandidate: " + e.message); }
       }
       return;
     }
@@ -222,9 +232,8 @@ function connectWS(){
 
 // ---- Call control
 async function acceptCall(){
-  $("#btnAccept").disabled = true;
-  $("#btnHangup").disabled = false;
-  await startLocal(); // 用户手势触发，解锁音频策略
+  btnAccept.disabled = true; btnHangup.disabled = false;
+  await startLocal();          // 解锁音频策略（需要手势）
   ensurePeer();
 
   try{
@@ -235,7 +244,7 @@ async function acceptCall(){
     while (pendingRemoteCandidates.length) {
       const c = pendingRemoteCandidates.shift();
       try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
-      catch(e){ log("❌ flush candidate error: " + e.message); }
+      catch(e){ log("❌ flush candidate: " + e.message); }
     }
 
     const answer = await pc.createAnswer();
@@ -246,76 +255,77 @@ async function acceptCall(){
     }));
     log("📤 Answer sent to parent");
 
-    // 解锁音频并强制播放
-    await resumeAudio();
-    $("#remoteVideo").play().catch(()=>{});
-  }catch(e){ log("❌ accept flow error: " + e.message); }
+    await forcePlay();
+  }catch(e){ log("❌ accept flow: " + e.message); }
 }
 
 function hangup(){
-  $("#btnAccept").disabled = true;
-  $("#btnHangup").disabled = true;
-  remoteDescSet = false;
-  pendingRemoteCandidates.length = 0;
+  btnAccept.disabled = true; btnHangup.disabled = true;
+  remoteDescSet = false; pendingRemoteCandidates.length = 0;
   if (pc) { try { pc.close(); } catch{} pc = null; }
   if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-  if (localMeter){ localMeter.ctx.close(); localMeter=null; }
-  if (remoteMeter){ remoteMeter.ctx.close(); remoteMeter=null; }
-  $("#localVideo").srcObject = null;
-  $("#remoteVideo").srcObject = null;
+  if (remoteStream){ remoteStream.getTracks().forEach(t=>t.stop()); remoteStream=null; }
+  try { localCtx && localCtx.close(); } catch{}; localCtx=null;
+  try { remoteCtx && remoteCtx.close(); } catch{}; remoteCtx=null;
+  vLocal.srcObject = null; vRemote.srcObject = null; aRemote.srcObject = null;
   connectWS();
 }
 
-// ---- Helpers: 音频解锁 & 输出设备
-async function resumeAudio() {
-  try { await localMeter?.ctx?.resume?.(); } catch {}
-  try { await remoteMeter?.ctx?.resume?.(); } catch {}
-  try { await $("#remoteVideo").play(); } catch {}
+// ---- 音频解锁 & 输出设备
+async function forcePlay(){
+  try { await localCtx?.resume?.(); } catch {}
+  try { await remoteCtx?.resume?.(); } catch {}
+  try { await vRemote.play(); } catch {}
+  try { await aRemote.play(); } catch {}
 }
-document.addEventListener("click", resumeAudio, { once:true });
-document.addEventListener("keydown", resumeAudio, { once:true });
+
+document.addEventListener("click", forcePlay, { once:true });
+document.addEventListener("keydown", forcePlay, { once:true });
 
 async function listOutputs() {
-  outSelEl = $("#outSel");
-  if (!outSelEl) return;
-  const v = $("#remoteVideo");
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const outs = devs.filter(d => d.kind === "audiooutput");
+    outSel.innerHTML = "";
+    outs.forEach((d, i) => {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.text  = d.label || `扬声器 ${i+1}`;
+      outSel.appendChild(opt);
+    });
 
-  const devs = await navigator.mediaDevices.enumerateDevices();
-  const outs = devs.filter(d => d.kind === "audiooutput");
-  outSelEl.innerHTML = "";
-  outs.forEach((d, i) => {
-    const opt = document.createElement("option");
-    opt.value = d.deviceId;
-    opt.text  = d.label || `扬声器 ${i+1}`;
-    outSelEl.appendChild(opt);
-  });
-
-  if (typeof v.setSinkId === "function") {
-    try { await v.setSinkId("default"); } catch {}
-    outSelEl.onchange = async (e) => {
-      try {
-        await v.setSinkId(e.target.value || "default");
-        log("🔊 输出设备：" + (e.target.selectedOptions[0]?.text || e.target.value));
-      } catch(err) {
-        log("❌ setSinkId 失败：" + err.message);
-      }
-    };
-  } else {
-    log("ℹ️ 浏览器不支持选择音频输出设备（setSinkId）。");
-    outSelEl.disabled = true;
-  }
+    if (typeof aRemote.setSinkId === "function") {
+      // 默认用系统默认
+      try { await aRemote.setSinkId("default"); } catch {}
+      outSel.onchange = async (e)=>{
+        try {
+          await aRemote.setSinkId(e.target.value || "default");
+          log("🔊 输出设备：" + (e.target.selectedOptions[0]?.text || e.target.value));
+        } catch(err) {
+          log("❌ setSinkId 失败：" + err.message);
+        }
+      };
+    } else {
+      log("ℹ️ 当前浏览器不支持 setSinkId（Safari 等），将使用系统默认输出设备。");
+      outSel.disabled = true;
+    }
+  } catch(e){ log("❌ 枚举音频设备失败：" + e.message); }
 }
 navigator.mediaDevices?.addEventListener?.("devicechange", listOutputs);
 
-// 标签页回到前台时尝试恢复播放
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) { $("#remoteVideo").play().catch(()=>{}); }
-});
+// 简单响铃进行自测
+$("#btnTestBeep").onclick = ()=>{
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = ctx.createOscillator(); const gain = ctx.createGain();
+  osc.connect(gain).connect(ctx.destination);
+  osc.type = "sine"; osc.frequency.value = 880; gain.gain.value = 0.1;
+  osc.start(); setTimeout(()=>{ osc.stop(); ctx.close(); }, 500);
+};
 
-// ---- Bind UI & start
-$("#btnStart").onclick = startLocal;
-$("#btnAccept").onclick = acceptCall;
-$("#btnHangup").onclick = hangup;
+// ---- Wire up
+btnStart.onclick = startLocal;
+btnAccept.onclick = acceptCall;
+btnHangup.onclick = hangup;
 
 connectWS();
 listOutputs();
