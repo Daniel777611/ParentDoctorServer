@@ -3,228 +3,223 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>👨‍⚕️ Doctor Video Console</title>
+  <title>👩‍⚕️ Doctor Video Console</title>
   <style>
-    body{margin:0;background:#0f0f10;color:#e8e8ea;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial}
-    .wrap{max-width:1100px;margin:28px auto;padding:0 16px}
-    h1{font-weight:700;text-align:center;margin:8px 0 18px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
-    video{width:100%;height:380px;background:#000;border:1px solid #3b3b3f;border-radius:10px;object-fit:cover}
-    .btns{display:flex;gap:12px;margin:18px 0}
-    button{padding:10px 18px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
-    .ok{background:#0fa36b;color:#fff}
-    .warn{background:#e55252;color:#fff}
-    .ok[disabled],.warn[disabled]{opacity:.45;cursor:not-allowed}
-    pre{background:#111214;border:1px solid #2a2b2f;border-radius:10px;color:#b9bcc6;
-        padding:10px;height:160px;overflow:auto;font-size:12px;line-height:1.5}
-    .small{opacity:.85;font-size:12px;text-align:center;margin-top:6px}
+    :root {
+      --bg: #0f0f10; --panel:#16181c; --ink:#e8eaed; --muted:#9aa0a6; --ok:#16a34a; --warn:#ef4444; --accent:#3b82f6;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto}
+    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+    h1{font-weight:800;letter-spacing:.2px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    video{width:100%;background:#000;border-radius:12px}
+    .panel{background:var(--panel);border-radius:14px;padding:14px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .btn{padding:10px 16px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
+    .btn.green{background:var(--ok);color:#fff}
+    .btn.red{background:var(--warn);color:#fff}
+    .log{height:180px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas;background:#0b0c0f;border-radius:10px;padding:10px;color:#cbd5e1}
+    .meter{height:10px;background:#1f2430;border-radius:999px;overflow:hidden;position:relative}
+    .bar{height:100%;width:8%;background:linear-gradient(90deg,#22c55e,#eab308 70%,#ef4444);transition:width .06s linear}
+    .label{min-width:92px;color:var(--muted);font-size:12px}
+    .row .label{margin-right:4px}
   </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>👨‍⚕️ Doctor Video Console</h1>
+  <div class="wrap">
+    <h1>👩‍⚕️ Doctor Video Console</h1>
 
-  <div class="grid">
-    <video id="local"  autoplay muted playsinline></video>
-    <video id="remote" autoplay        playsinline></video>
+    <div class="grid">
+      <div>
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div class="panel">
+          <div class="row" style="margin-bottom:8px">
+            <span class="label">本地麦克风</span>
+            <div class="meter" style="flex:1"><div id="localBar" class="bar"></div></div>
+          </div>
+          <div class="row" style="margin-bottom:4px">
+            <span class="label">本地摄像头</span>
+            <button id="btnStart" class="btn">启用设备</button>
+          </div>
+          <div class="row" style="gap:12px">
+            <button id="btnAccept" class="btn green" disabled>接听</button>
+            <button id="btnHangup" class="btn red" disabled>挂断</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <video id="remoteVideo" autoplay playsinline></video>
+        <div class="panel">
+          <div class="row" style="margin-bottom:8px">
+            <span class="label">远端麦克风</span>
+            <div class="meter" style="flex:1"><div id="remoteBar" class="bar"></div></div>
+          </div>
+          <div class="log" id="log"></div>
+          <div style="color:var(--muted);font-size:12px;margin-top:8px">
+            WS 与 WebRTC 都在本页完成。若视频黑屏，请检查浏览器的相机/麦克风授权。
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-
-  <div class="btns">
-    <button id="answerBtn" class="ok"   disabled>接听</button>
-    <button id="hangupBtn" class="warn" disabled>挂断</button>
-  </div>
-
-  <pre id="log"></pre>
-  <div class="small">WS 与 WebRTC 都在本页完成。若预览黑屏，请检查浏览器的相机/麦克风权限。</div>
-</div>
 
 <script>
-(async () => {
-  // === 可选：自动接听（true=自动接听，false=需点击“接听”） ===
-  const AUTO_ANSWER = false;
+const $ = s => document.querySelector(s);
+const log = (t)=>{ const el=$("#log"); el.innerHTML += t+"<br/>"; el.scrollTop=el.scrollHeight; };
 
-  const $local  = document.getElementById('local');
-  const $remote = document.getElementById('remote');
-  const $answer = document.getElementById('answerBtn');
-  const $hangup = document.getElementById('hangupBtn');
-  const $log    = document.getElementById('log');
+let ws, pc, localStream, remoteStream;
+let localMeter = null, remoteMeter = null;
+let pendingOffer = null;
 
-  const log = (...args) => {
-    const line = args.map(x => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ');
-    $log.textContent += line + '\n';
-    $log.scrollTop = $log.scrollHeight;
-    console.log('[Doctor]', ...args);
+const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
+
+const rtcConfig = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+};
+
+function mkPeer() {
+  pc = new RTCPeerConnection(rtcConfig);
+
+  pc.onicecandidate = (e)=>{
+    if (e.candidate) {
+      ws.send(JSON.stringify({ type:"candidate", to:"parent", payload:{ candidate:e.candidate } }));
+    }
   };
 
-  // ---- WebSocket ----
-  const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
-  const ws = new WebSocket(wsUrl);
+  pc.ontrack = (e)=>{
+    if (!remoteStream) {
+      remoteStream = new MediaStream();
+      $("#remoteVideo").srcObject = remoteStream;
+      setupRemoteMeter(remoteStream);
+    }
+    remoteStream.addTrack(e.track);
+  };
 
-  // ---- WebRTC ----
-  let pc;
-  let localStream;
-  let haveOffer = null;               // 保存收到的 offer（延后接听）
-  const pendingCandidates = [];       // 在 setRemoteDescription 之前暂存 ICE
+  pc.onconnectionstatechange = ()=>{
+    log("🔗 PC state: " + pc.connectionState);
+  };
+}
 
-  function mkPC(){
-    const _pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+async function startLocal() {
+  if (localStream) return;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30,max:30} },
+      audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true }
     });
+    $("#localVideo").srcObject = localStream;
+    mkPeer();
+    for (const t of localStream.getTracks()) pc.addTrack(t, localStream);
+    setupLocalMeter(localStream);
+    $("#btnStart").disabled = true;
+    log("🎥 Local stream ready, waiting for Offer…");
+  } catch(err){
+    log("❌ getUserMedia error: " + err.message);
+    alert("需要相机/麦克风权限");
+  }
+}
 
-    _pc.onicecandidate = (e) => {
-      if (!e.candidate) return;
-      wsSend({
-        type: 'signal',
-        from: 'doctor',
-        to:   'parent',
-        payload: {
-          type: 'candidate',
-          candidate: e.candidate.candidate,
-          sdpMid: e.candidate.sdpMid,
-          sdpMLineIndex: e.candidate.sdpMLineIndex
-        }
-      });
-      log('📮 Sent ICE Candidate');
-    };
+function setupLocalMeter(stream){
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  src.connect(analyser);
 
-    _pc.ontrack = (ev) => {
-      if ($remote.srcObject !== ev.streams[0]) {
-        $remote.srcObject = ev.streams[0];
-        $remote.play().catch(()=>{});
-        log('📺 Remote track received');
+  const bar = $("#localBar");
+  function tick(){
+    const buf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(buf);
+    let sum=0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
+    const rms = Math.sqrt(sum/buf.length);
+    const level = Math.min(1, rms*4); // 简单放大显示
+    bar.style.width = (level*100).toFixed(1)+"%";
+    requestAnimationFrame(tick);
+  }
+  tick();
+  localMeter = {ctx, analyser};
+}
+
+function setupRemoteMeter(rStream){
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(rStream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  src.connect(analyser);
+
+  const bar = $("#remoteBar");
+  function tick(){
+    const buf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(buf);
+    let sum=0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
+    const rms = Math.sqrt(sum/buf.length);
+    const level = Math.min(1, rms*4);
+    bar.style.width = (level*100).toFixed(1)+"%";
+    requestAnimationFrame(tick);
+  }
+  tick();
+  remoteMeter = {ctx, analyser};
+}
+
+function connectWS(){
+  ws = new WebSocket(wsURL);
+  ws.onopen = ()=>{
+    ws.send(JSON.stringify({type:"register", id:"doctor"}));
+    log("🔌 WS connected: "+wsURL);
+  };
+  ws.onmessage = async (ev)=>{
+    const msg = JSON.parse(ev.data||"{}");
+    if (msg.type === "offer") {
+      log("📩 Offer received from a parent");
+      pendingOffer = msg.payload?.sdp;
+      $("#btnAccept").disabled = false;
+    } else if (msg.type === "candidate") {
+      const c = msg.payload?.candidate;
+      if (c) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
+        catch(e){ log("❌ addIceCandidate error: "+e.message); }
       }
-    };
-
-    return _pc;
-  }
-
-  async function startLocalMedia() {
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      $local.srcObject = localStream;
-      await $local.play().catch(()=>{});
-      log('🎥 Local stream ready, waiting for Offer…');
-    } catch (err) {
-      log('⚠️ Camera/mic access denied:', err.message || err);
     }
-  }
+  };
+  ws.onclose = ()=> log("🔌 WS closed");
+}
 
-  async function ensurePC() {
-    if (pc) return pc;
-    pc = mkPC();
-    if (!localStream) await startLocalMedia();
-    for (const track of localStream.getTracks()) {
-      pc.addTrack(track, localStream);
-    }
-    $hangup.disabled = false;
-    return pc;
-  }
+async function acceptCall(){
+  $("#btnAccept").disabled = true;
+  $("#btnHangup").disabled  = false;
+  if (!localStream) await startLocal();
+  if (!pc) mkPeer();
 
-  async function acceptOffer(offer) {
-    const pc = await ensurePC();
-    const desc = { type: 'offer', sdp: offer.sdp };
-    await pc.setRemoteDescription(desc);
-    log('✅ setRemoteDescription(offer)');
-
-    while (pendingCandidates.length) {
-      const c = pendingCandidates.shift();
-      try { await pc.addIceCandidate(c); } catch (e) { log('⚠️ addQueuedCandidate error:', e.message || e); }
-    }
-
+  try{
+    await pc.setRemoteDescription({type:"offer", sdp: pendingOffer});
+    log("📥 setRemoteDescription(offer)");
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    wsSend({
-      type: 'signal',
-      from: 'doctor',
-      to:   'parent',
-      payload: { type: 'answer', sdp: answer.sdp }
-    });
-    log('📮 Answer sent to parent');
-  }
+    ws.send(JSON.stringify({ type:"answer", to:"parent", payload:{ sdp: answer.sdp }}));
+    log("📤 Answer sent to parent");
+  }catch(e){ log("❌ Answer flow error: "+e.message); }
+}
 
-  async function addRemoteCandidate(payload) {
-    const candInit = {
-      candidate: payload.candidate,
-      sdpMid: payload.sdpMid,
-      sdpMLineIndex: payload.sdpMLineIndex
-    };
-    if (!pc || !pc.remoteDescription) {
-      pendingCandidates.push(candInit);
-      return;
-    }
-    try {
-      await pc.addIceCandidate(candInit);
-      log('✅ ICE Candidate added');
-    } catch (e) {
-      log('⚠️ addIceCandidate error:', e.message || e);
-    }
-  }
+function hangup(){
+  $("#btnAccept").disabled = true;
+  $("#btnHangup").disabled  = true;
 
-  function wsSend(obj) {
-    try {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-    } catch (e) {
-      log('⚠️ WS send error:', e.message || e);
-    }
-  }
+  try { ws && ws.close(); }catch{}
+  if (pc){ pc.getSenders().forEach(s=>s.track && s.track.stop()); pc.close(); pc=null; }
+  if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  if (localMeter){ localMeter.ctx.close(); localMeter=null; }
+  if (remoteMeter){ remoteMeter.ctx.close(); remoteMeter=null; }
+  $("#localVideo").srcObject = null;
+  $("#remoteVideo").srcObject = null;
+  connectWS(); // 重新连回去等下一次通话
+}
 
-  // ---- UI ----
-  $answer.onclick = async () => {
-    if (!haveOffer) return;
-    $answer.disabled = true;
-    await acceptOffer(haveOffer);
-    haveOffer = null;
-  };
+$("#btnStart").onclick = startLocal;
+$("#btnAccept").onclick = acceptCall;
+$("#btnHangup").onclick = hangup;
 
-  $hangup.onclick = () => {
-    try { pc && pc.close(); } catch {}
-    pc = null;
-    $hangup.disabled = true;
-    $answer.disabled = true;
-    wsSend({ type: 'signal', from:'doctor', to:'parent', payload:{ type:'hangup' }});
-    log('🧹 Call ended');
-  };
-
-  // ---- WS 事件 ----
-  ws.onopen = async () => {
-    log(`🔌 WS connected: ${wsUrl}`);
-    wsSend({ type:'register', id:'doctor' });
-    await startLocalMedia();
-  };
-
-  ws.onmessage = async (ev) => {
-    let msg;
-    try { msg = JSON.parse(ev.data); } catch { return; }
-
-    // ✅ 兼容两种风格：1) 包了 payload 的 signal；2) 直接 offer/candidate
-    if (msg.type === 'signal') {
-      const p = msg.payload || {};
-      if (p.type === 'offer' || p.sdp) {
-        haveOffer = { type: 'offer', sdp: p.sdp || p.offer?.sdp };
-        log('📥 Offer received from parent');
-        if (AUTO_ANSWER) { await acceptOffer(haveOffer); haveOffer = null; }
-        else { $answer.disabled = false; log('👉 点击 [接听] 开始通话'); }
-      } else if (p.type === 'candidate' && p.candidate) {
-        await addRemoteCandidate(p);
-      } else if (p.type === 'hangup') {
-        $hangup.click();
-      }
-      return;
-    }
-
-    // ✅ 老格式：直接下发
-    if (msg.type === 'offer' || msg.sdp) {
-      haveOffer = { type: 'offer', sdp: msg.sdp || msg.offer?.sdp };
-      log('📥 Offer received (legacy)');
-      if (AUTO_ANSWER) { await acceptOffer(haveOffer); haveOffer = null; }
-      else { $answer.disabled = false; log('👉 点击 [接听] 开始通话'); }
-    } else if (msg.type === 'candidate') {
-      await addRemoteCandidate(msg);
-    }
-  };
-
-  ws.onclose = () => log('🧯 WS closed');
-})();
+connectWS(); // 进入页就连服务器（医生端）
 </script>
 </body>
 </html>
