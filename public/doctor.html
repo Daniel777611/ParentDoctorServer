@@ -19,6 +19,7 @@
     .meter{height:10px;background:#1f2430;border-radius:999px;overflow:hidden}
     .bar{height:100%;width:8%;background:linear-gradient(90deg,#22c55e,#eab308 70%,#ef4444);transition:width .06s linear}
     .label{min-width:92px;color:#9aa0a6;font-size:12px}
+    select.btn{padding:8px 10px}
   </style>
 </head>
 <body>
@@ -32,7 +33,7 @@
           <span class="label">本地麦克风</span>
           <div class="meter" style="flex:1"><div id="localBar" class="bar"></div></div>
         </div>
-        <div class="row" style="margin-bottom:4px">
+        <div class="row" style="margin-bottom:6px">
           <span class="label">本地摄像头</span>
           <button id="btnStart" class="btn">启用设备</button>
         </div>
@@ -50,9 +51,16 @@
           <span class="label">远端麦克风</span>
           <div class="meter" style="flex:1"><div id="remoteBar" class="bar"></div></div>
         </div>
+
+        <!-- 输出设备选择（需要 HTTPS；Chrome/Edge 支持 setSinkId） -->
+        <div class="row" style="margin-bottom:6px">
+          <span class="label">输出设备</span>
+          <select id="outSel" class="btn" style="background:#222;color:#fff"></select>
+        </div>
+
         <div class="log" id="log"></div>
         <div style="color:#9aa0a6;font-size:12px;margin-top:8px">
-          若黑屏/卡顿：请确认网络或公司代理限制，并确保浏览器允许相机与麦克风。
+          若黑屏/卡顿/无声：检查浏览器相机与麦克风权限；确保未静音标签；公司网络可能限制 UDP/TCP 443。
         </div>
       </div>
     </div>
@@ -63,12 +71,15 @@
 const $ = s => document.querySelector(s);
 const log = (t)=>{ const el=$("#log"); el.innerHTML += t+"<br/>"; el.scrollTop=el.scrollHeight; };
 
+// ---- State
 let ws, pc, localStream, remoteStream;
 let localMeter = null, remoteMeter = null;
 let pendingOffer = null;
 let remoteDescSet = false;
 const pendingRemoteCandidates = [];
+let outSelEl = null;
 
+// ---- Config
 const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
 const rtcConfig = {
   iceServers: [
@@ -79,6 +90,7 @@ const rtcConfig = {
   ]
 };
 
+// ---- Peer
 function ensurePeer() {
   if (pc) return;
   pc = new RTCPeerConnection(rtcConfig);
@@ -97,10 +109,11 @@ function ensurePeer() {
       remoteStream = new MediaStream();
       const v = $("#remoteVideo");
       v.srcObject = remoteStream;
-      v.muted = false;
+      v.muted = false;           // ✅ 不静音
+      v.volume = 1.0;
       v.autoplay = true;
       v.playsInline = true;
-      v.play().catch(()=>{});
+      v.play().catch(()=>{});    // ✅ 强制播放
       setupRemoteMeter(remoteStream);
     }
     remoteStream.addTrack(e.track);
@@ -111,6 +124,7 @@ function ensurePeer() {
   };
 }
 
+// ---- Local media
 async function startLocal() {
   if (localStream) return;
   try {
@@ -123,8 +137,8 @@ async function startLocal() {
     ensurePeer();
     for (const t of localStream.getTracks()) {
       const sender = pc.addTrack(t, localStream);
-      // 限制医生端上行码率，避免拥塞
-      if (t.kind === "video") {
+      // 控制网页端上行码率（避免拥塞）
+      if (t.kind === "video" && sender.getParameters) {
         const p = sender.getParameters();
         p.encodings = p.encodings || [{}];
         p.encodings[0].maxBitrate = 1_200_000; // ~1.2Mbps
@@ -173,6 +187,7 @@ function setupRemoteMeter(rStream){
   remoteMeter = {ctx, analyser};
 }
 
+// ---- WebSocket
 function connectWS(){
   if (ws) try { ws.close(); } catch {}
   ws = new WebSocket(wsURL);
@@ -205,10 +220,11 @@ function connectWS(){
   };
 }
 
+// ---- Call control
 async function acceptCall(){
   $("#btnAccept").disabled = true;
   $("#btnHangup").disabled = false;
-  await startLocal(); // 用户手势触发，解锁音频
+  await startLocal(); // 用户手势触发，解锁音频策略
   ensurePeer();
 
   try{
@@ -230,7 +246,8 @@ async function acceptCall(){
     }));
     log("📤 Answer sent to parent");
 
-    // 确保远端媒体能自动播放
+    // 解锁音频并强制播放
+    await resumeAudio();
     $("#remoteVideo").play().catch(()=>{});
   }catch(e){ log("❌ accept flow error: " + e.message); }
 }
@@ -249,15 +266,59 @@ function hangup(){
   connectWS();
 }
 
+// ---- Helpers: 音频解锁 & 输出设备
+async function resumeAudio() {
+  try { await localMeter?.ctx?.resume?.(); } catch {}
+  try { await remoteMeter?.ctx?.resume?.(); } catch {}
+  try { await $("#remoteVideo").play(); } catch {}
+}
+document.addEventListener("click", resumeAudio, { once:true });
+document.addEventListener("keydown", resumeAudio, { once:true });
+
+async function listOutputs() {
+  outSelEl = $("#outSel");
+  if (!outSelEl) return;
+  const v = $("#remoteVideo");
+
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const outs = devs.filter(d => d.kind === "audiooutput");
+  outSelEl.innerHTML = "";
+  outs.forEach((d, i) => {
+    const opt = document.createElement("option");
+    opt.value = d.deviceId;
+    opt.text  = d.label || `扬声器 ${i+1}`;
+    outSelEl.appendChild(opt);
+  });
+
+  if (typeof v.setSinkId === "function") {
+    try { await v.setSinkId("default"); } catch {}
+    outSelEl.onchange = async (e) => {
+      try {
+        await v.setSinkId(e.target.value || "default");
+        log("🔊 输出设备：" + (e.target.selectedOptions[0]?.text || e.target.value));
+      } catch(err) {
+        log("❌ setSinkId 失败：" + err.message);
+      }
+    };
+  } else {
+    log("ℹ️ 浏览器不支持选择音频输出设备（setSinkId）。");
+    outSelEl.disabled = true;
+  }
+}
+navigator.mediaDevices?.addEventListener?.("devicechange", listOutputs);
+
+// 标签页回到前台时尝试恢复播放
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) { $("#remoteVideo").play().catch(()=>{}); }
 });
 
+// ---- Bind UI & start
 $("#btnStart").onclick = startLocal;
 $("#btnAccept").onclick = acceptCall;
 $("#btnHangup").onclick = hangup;
 
 connectWS();
+listOutputs();
 </script>
 </body>
 </html>
