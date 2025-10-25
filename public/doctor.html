@@ -5,64 +5,59 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>👩‍⚕️ Doctor Video Console</title>
   <style>
-    :root {
-      --bg: #0f0f10; --panel:#16181c; --ink:#e8eaed; --muted:#9aa0a6; --ok:#16a34a; --warn:#ef4444; --accent:#3b82f6;
-    }
+    :root { --bg:#0f0f10; --panel:#16181c; --ink:#e8eaed; --muted:#9aa0a6; --ok:#16a34a; --warn:#ef4444; }
     html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto}
     .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
-    h1{font-weight:800;letter-spacing:.2px}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
     video{width:100%;background:#000;border-radius:12px}
-    .panel{background:var(--panel);border-radius:14px;padding:14px}
+    .panel{background:#16181c;border-radius:14px;padding:14px}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .btn{padding:10px 16px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
     .btn.green{background:var(--ok);color:#fff}
     .btn.red{background:var(--warn);color:#fff}
     .log{height:180px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas;background:#0b0c0f;border-radius:10px;padding:10px;color:#cbd5e1}
-    .meter{height:10px;background:#1f2430;border-radius:999px;overflow:hidden;position:relative}
+    .meter{height:10px;background:#1f2430;border-radius:999px;overflow:hidden}
     .bar{height:100%;width:8%;background:linear-gradient(90deg,#22c55e,#eab308 70%,#ef4444);transition:width .06s linear}
-    .label{min-width:92px;color:var(--muted);font-size:12px}
-    .row .label{margin-right:4px}
+    .label{min-width:92px;color:#9aa0a6;font-size:12px}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>👩‍⚕️ Doctor Video Console</h1>
-
-    <div class="grid">
-      <div>
-        <video id="localVideo" autoplay playsinline muted></video>
-        <div class="panel">
-          <div class="row" style="margin-bottom:8px">
-            <span class="label">本地麦克风</span>
-            <div class="meter" style="flex:1"><div id="localBar" class="bar"></div></div>
-          </div>
-          <div class="row" style="margin-bottom:4px">
-            <span class="label">本地摄像头</span>
-            <button id="btnStart" class="btn">启用设备</button>
-          </div>
-          <div class="row" style="gap:12px">
-            <button id="btnAccept" class="btn green" disabled>接听</button>
-            <button id="btnHangup" class="btn red" disabled>挂断</button>
-          </div>
+<div class="wrap">
+  <h1>👩‍⚕️ Doctor Video Console</h1>
+  <div class="grid">
+    <div>
+      <video id="localVideo" autoplay playsinline muted></video>
+      <div class="panel">
+        <div class="row" style="margin-bottom:8px">
+          <span class="label">本地麦克风</span>
+          <div class="meter" style="flex:1"><div id="localBar" class="bar"></div></div>
+        </div>
+        <div class="row" style="margin-bottom:4px">
+          <span class="label">本地摄像头</span>
+          <button id="btnStart" class="btn">启用设备</button>
+        </div>
+        <div class="row" style="gap:12px">
+          <button id="btnAccept" class="btn green" disabled>接听</button>
+          <button id="btnHangup" class="btn red" disabled>挂断</button>
         </div>
       </div>
+    </div>
 
-      <div>
-        <video id="remoteVideo" autoplay playsinline></video>
-        <div class="panel">
-          <div class="row" style="margin-bottom:8px">
-            <span class="label">远端麦克风</span>
-            <div class="meter" style="flex:1"><div id="remoteBar" class="bar"></div></div>
-          </div>
-          <div class="log" id="log"></div>
-          <div style="color:var(--muted);font-size:12px;margin-top:8px">
-            WS 与 WebRTC 都在本页完成。若视频黑屏，请检查浏览器的相机/麦克风授权。
-          </div>
+    <div>
+      <video id="remoteVideo" autoplay playsinline></video>
+      <div class="panel">
+        <div class="row" style="margin-bottom:8px">
+          <span class="label">远端麦克风</span>
+          <div class="meter" style="flex:1"><div id="remoteBar" class="bar"></div></div>
+        </div>
+        <div class="log" id="log"></div>
+        <div style="color:#9aa0a6;font-size:12px;margin-top:8px">
+          WS 与 WebRTC 都在本页完成。若黑屏，请确认浏览器已允许相机/麦克风权限。
         </div>
       </div>
     </div>
   </div>
+</div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -73,17 +68,20 @@ let localMeter = null, remoteMeter = null;
 let pendingOffer = null;
 
 const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
-
-const rtcConfig = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-};
+const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
 function mkPeer() {
   pc = new RTCPeerConnection(rtcConfig);
 
   pc.onicecandidate = (e)=>{
     if (e.candidate) {
-      ws.send(JSON.stringify({ type:"candidate", to:"parent", payload:{ candidate:e.candidate } }));
+      // ✅ 统一 signal 包装
+      ws.send(JSON.stringify({
+        type:"signal",
+        from:"doctor",
+        to:"parent",
+        payload:{ candidate: e.candidate }
+      }));
     }
   };
 
@@ -96,9 +94,7 @@ function mkPeer() {
     remoteStream.addTrack(e.track);
   };
 
-  pc.onconnectionstatechange = ()=>{
-    log("🔗 PC state: " + pc.connectionState);
-  };
+  pc.onconnectionstatechange = ()=> log("🔗 PC state: " + pc.connectionState);
 }
 
 async function startLocal() {
@@ -124,20 +120,16 @@ function setupLocalMeter(stream){
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const src = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser();
-  analyser.fftSize = 1024;
-  src.connect(analyser);
-
+  analyser.fftSize = 1024; src.connect(analyser);
   const bar = $("#localBar");
-  function tick(){
+  (function tick(){
     const buf = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buf);
     let sum=0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
     const rms = Math.sqrt(sum/buf.length);
-    const level = Math.min(1, rms*4); // 简单放大显示
-    bar.style.width = (level*100).toFixed(1)+"%";
+    bar.style.width = (Math.min(1, rms*4)*100).toFixed(1)+"%";
     requestAnimationFrame(tick);
-  }
-  tick();
+  })();
   localMeter = {ctx, analyser};
 }
 
@@ -145,20 +137,16 @@ function setupRemoteMeter(rStream){
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const src = ctx.createMediaStreamSource(rStream);
   const analyser = ctx.createAnalyser();
-  analyser.fftSize = 1024;
-  src.connect(analyser);
-
+  analyser.fftSize = 1024; src.connect(analyser);
   const bar = $("#remoteBar");
-  function tick(){
+  (function tick(){
     const buf = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buf);
     let sum=0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
     const rms = Math.sqrt(sum/buf.length);
-    const level = Math.min(1, rms*4);
-    bar.style.width = (level*100).toFixed(1)+"%";
+    bar.style.width = (Math.min(1, rms*4)*100).toFixed(1)+"%";
     requestAnimationFrame(tick);
-  }
-  tick();
+  })();
   remoteMeter = {ctx, analyser};
 }
 
@@ -170,16 +158,21 @@ function connectWS(){
   };
   ws.onmessage = async (ev)=>{
     const msg = JSON.parse(ev.data||"{}");
-    if (msg.type === "offer") {
-      log("📩 Offer received from a parent");
-      pendingOffer = msg.payload?.sdp;
+
+    // ✅ 只处理服务器转发的 {type:"signal", payload:{ offer|candidate|answer }}
+    if (msg.type !== "signal") return;
+    const p = msg.payload || {};
+
+    if (p.offer) {                                   // 收到 iOS 的 Offer
+      log("📩 Offer received from parent");
+      pendingOffer = p.offer.sdp;
       $("#btnAccept").disabled = false;
-    } else if (msg.type === "candidate") {
-      const c = msg.payload?.candidate;
-      if (c) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
-        catch(e){ log("❌ addIceCandidate error: "+e.message); }
-      }
+    } else if (p.candidate) {                        // 收到对端 ICE
+      try { await pc.addIceCandidate(new RTCIceCandidate(p.candidate)); }
+      catch(e){ log("❌ addIceCandidate error: "+e.message); }
+    } else if (p.answer) {
+      // 医生端通常不会收到 answer，这里仅打印
+      log("ℹ️ Unexpected answer on doctor side");
     }
   };
   ws.onclose = ()=> log("🔌 WS closed");
@@ -196,7 +189,14 @@ async function acceptCall(){
     log("📥 setRemoteDescription(offer)");
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    ws.send(JSON.stringify({ type:"answer", to:"parent", payload:{ sdp: answer.sdp }}));
+
+    // ✅ 统一 signal 包装发送给 iOS
+    ws.send(JSON.stringify({
+      type:"signal",
+      from:"doctor",
+      to:"parent",
+      payload:{ answer:{ type:"answer", sdp: answer.sdp } }
+    }));
     log("📤 Answer sent to parent");
   }catch(e){ log("❌ Answer flow error: "+e.message); }
 }
@@ -212,14 +212,15 @@ function hangup(){
   if (remoteMeter){ remoteMeter.ctx.close(); remoteMeter=null; }
   $("#localVideo").srcObject = null;
   $("#remoteVideo").srcObject = null;
-  connectWS(); // 重新连回去等下一次通话
+  connectWS(); // 等下一次通话
 }
 
 $("#btnStart").onclick = startLocal;
 $("#btnAccept").onclick = acceptCall;
 $("#btnHangup").onclick = hangup;
 
-connectWS(); // 进入页就连服务器（医生端）
+connectWS();     // 进入页即连接
+startLocal();    // 允许后先准备本地流，接 Offer 更快
 </script>
 </body>
 </html>
