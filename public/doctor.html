@@ -52,7 +52,7 @@
         </div>
         <div class="log" id="log"></div>
         <div style="color:#9aa0a6;font-size:12px;margin-top:8px">
-          WS 与 WebRTC 均在本页完成；若黑屏，请检查浏览器相机/麦克风权限或网络/公司代理限制。
+          若黑屏/卡顿：请确认网络或公司代理限制，并确保浏览器允许相机与麦克风。
         </div>
       </div>
     </div>
@@ -67,7 +67,7 @@ let ws, pc, localStream, remoteStream;
 let localMeter = null, remoteMeter = null;
 let pendingOffer = null;
 let remoteDescSet = false;
-const pendingRemoteCandidates = []; // 远端 ICE 排队
+const pendingRemoteCandidates = [];
 
 const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
 const rtcConfig = {
@@ -95,7 +95,12 @@ function ensurePeer() {
   pc.ontrack = (e)=>{
     if (!remoteStream) {
       remoteStream = new MediaStream();
-      $("#remoteVideo").srcObject = remoteStream;
+      const v = $("#remoteVideo");
+      v.srcObject = remoteStream;
+      v.muted = false;
+      v.autoplay = true;
+      v.playsInline = true;
+      v.play().catch(()=>{});
       setupRemoteMeter(remoteStream);
     }
     remoteStream.addTrack(e.track);
@@ -103,10 +108,6 @@ function ensurePeer() {
 
   pc.onconnectionstatechange = ()=>{
     log("🔗 PC state: " + pc.connectionState);
-    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-      $("#btnAccept").disabled = false;
-      $("#btnHangup").disabled = true;
-    }
   };
 }
 
@@ -120,7 +121,16 @@ async function startLocal() {
     $("#localVideo").srcObject = localStream;
     setupLocalMeter(localStream);
     ensurePeer();
-    for (const t of localStream.getTracks()) pc.addTrack(t, localStream);
+    for (const t of localStream.getTracks()) {
+      const sender = pc.addTrack(t, localStream);
+      // 限制医生端上行码率，避免拥塞
+      if (t.kind === "video") {
+        const p = sender.getParameters();
+        p.encodings = p.encodings || [{}];
+        p.encodings[0].maxBitrate = 1_200_000; // ~1.2Mbps
+        sender.setParameters(p).catch(()=>{});
+      }
+    }
     $("#btnStart").disabled = true;
     log("🎥 Local stream ready.");
   } catch(err){
@@ -167,7 +177,7 @@ function connectWS(){
   if (ws) try { ws.close(); } catch {}
   ws = new WebSocket(wsURL);
   ws.onopen = ()=>{
-    ws.send(JSON.stringify({type:"register", id:"doctor"})); // 固定 doctor
+    ws.send(JSON.stringify({type:"register", id:"doctor"}));
     log("🔌 WS connected: "+wsURL);
   };
   ws.onmessage = async (ev)=>{
@@ -175,7 +185,6 @@ function connectWS(){
     if (msg.type !== "signal") return;
     const p = msg.payload || {};
 
-    // Offer 到达 → 启用“接听”
     if (p.offer) {
       pendingOffer = p.offer.sdp;
       $("#btnAccept").disabled = false;
@@ -183,13 +192,12 @@ function connectWS(){
       return;
     }
 
-    // 远端 ICE：若尚未设置 remoteDescription，先排队
     if (p.candidate) {
       if (!remoteDescSet) {
         pendingRemoteCandidates.push(p.candidate);
         log("🧊 queued remote candidate");
       } else {
-        try { await pc.addIceCandidate(new RTCiceCandidate(p.candidate)); }
+        try { await pc.addIceCandidate(new RTCIceCandidate(p.candidate)); }
         catch(e){ log("❌ addIceCandidate error: " + e.message); }
       }
       return;
@@ -200,7 +208,7 @@ function connectWS(){
 async function acceptCall(){
   $("#btnAccept").disabled = true;
   $("#btnHangup").disabled = false;
-  await startLocal();
+  await startLocal(); // 用户手势触发，解锁音频
   ensurePeer();
 
   try{
@@ -208,7 +216,6 @@ async function acceptCall(){
     remoteDescSet = true;
     log("📥 setRemoteDescription(offer)");
 
-    // 把排队的远端 ICE 全部补加
     while (pendingRemoteCandidates.length) {
       const c = pendingRemoteCandidates.shift();
       try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
@@ -222,6 +229,9 @@ async function acceptCall(){
       payload:{ answer:{ type:"answer", sdp: answer.sdp } }
     }));
     log("📤 Answer sent to parent");
+
+    // 确保远端媒体能自动播放
+    $("#remoteVideo").play().catch(()=>{});
   }catch(e){ log("❌ accept flow error: " + e.message); }
 }
 
@@ -239,11 +249,14 @@ function hangup(){
   connectWS();
 }
 
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { $("#remoteVideo").play().catch(()=>{}); }
+});
+
 $("#btnStart").onclick = startLocal;
 $("#btnAccept").onclick = acceptCall;
 $("#btnHangup").onclick = hangup;
 
-// 初始：仅连接 WS，待有 Offer 才接听
 connectWS();
 </script>
 </body>
