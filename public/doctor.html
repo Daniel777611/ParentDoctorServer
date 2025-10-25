@@ -15,7 +15,7 @@
     .btn{padding:10px 16px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
     .btn.green{background:var(--ok);color:#fff}
     .btn.red{background:var(--warn);color:#fff}
-    .log{height:180px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas;background:#0b0c0f;border-radius:10px;padding:10px;color:#cbd5e1}
+    .log{height:200px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas;background:#0b0c0f;border-radius:10px;padding:10px;color:#cbd5e1}
     .meter{height:10px;background:#1f2430;border-radius:999px;overflow:hidden}
     .bar{height:100%;width:8%;background:linear-gradient(90deg,#22c55e,#eab308 70%,#ef4444);transition:width .06s linear}
     .label{min-width:92px;color:#9aa0a6;font-size:12px}
@@ -52,7 +52,7 @@
         </div>
         <div class="log" id="log"></div>
         <div style="color:#9aa0a6;font-size:12px;margin-top:8px">
-          WS 与 WebRTC 都在本页完成。若黑屏，请确认浏览器已允许相机/麦克风权限。
+          WS 与 WebRTC 均在本页完成；若黑屏，请检查浏览器相机/麦克风权限或网络/公司代理限制。
         </div>
       </div>
     </div>
@@ -66,20 +66,28 @@ const log = (t)=>{ const el=$("#log"); el.innerHTML += t+"<br/>"; el.scrollTop=e
 let ws, pc, localStream, remoteStream;
 let localMeter = null, remoteMeter = null;
 let pendingOffer = null;
+let remoteDescSet = false;
+const pendingRemoteCandidates = []; // ✅ 远端 ICE 排队
 
 const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
-const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+const rtcConfig = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    // ✅ TURN（仅测试用途；请换成你自己的服务）
+    { urls: "turn:global.relay.metered.ca:80", username: "open", credential: "open" },
+    { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "open", credential: "open" },
+    { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "open", credential: "open" }
+  ]
+};
 
-function mkPeer() {
+function ensurePeer() {
+  if (pc) return;
   pc = new RTCPeerConnection(rtcConfig);
 
   pc.onicecandidate = (e)=>{
     if (e.candidate) {
-      // ✅ 统一 signal 包装
       ws.send(JSON.stringify({
-        type:"signal",
-        from:"doctor",
-        to:"parent",
+        type:"signal", from:"doctor", to:"parent",
         payload:{ candidate: e.candidate }
       }));
     }
@@ -94,7 +102,13 @@ function mkPeer() {
     remoteStream.addTrack(e.track);
   };
 
-  pc.onconnectionstatechange = ()=> log("🔗 PC state: " + pc.connectionState);
+  pc.onconnectionstatechange = ()=>{
+    log("🔗 PC state: " + pc.connectionState);
+    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+      $("#btnAccept").disabled = false;
+      $("#btnHangup").disabled = true;
+    }
+  };
 }
 
 async function startLocal() {
@@ -105,11 +119,11 @@ async function startLocal() {
       audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true }
     });
     $("#localVideo").srcObject = localStream;
-    mkPeer();
-    for (const t of localStream.getTracks()) pc.addTrack(t, localStream);
     setupLocalMeter(localStream);
+    ensurePeer();
+    for (const t of localStream.getTracks()) pc.addTrack(t, localStream);
     $("#btnStart").disabled = true;
-    log("🎥 Local stream ready, waiting for Offer…");
+    log("🎥 Local stream ready.");
   } catch(err){
     log("❌ getUserMedia error: " + err.message);
     alert("需要相机/麦克风权限");
@@ -151,6 +165,7 @@ function setupRemoteMeter(rStream){
 }
 
 function connectWS(){
+  if (ws) try { ws.close(); } catch {}
   ws = new WebSocket(wsURL);
   ws.onopen = ()=>{
     ws.send(JSON.stringify({type:"register", id:"doctor"}));
@@ -158,69 +173,79 @@ function connectWS(){
   };
   ws.onmessage = async (ev)=>{
     const msg = JSON.parse(ev.data||"{}");
-
-    // ✅ 只处理服务器转发的 {type:"signal", payload:{ offer|candidate|answer }}
     if (msg.type !== "signal") return;
     const p = msg.payload || {};
 
-    if (p.offer) {                                   // 收到 iOS 的 Offer
-      log("📩 Offer received from parent");
+    // Offer 到达 → 允许接听
+    if (p.offer) {
       pendingOffer = p.offer.sdp;
       $("#btnAccept").disabled = false;
-    } else if (p.candidate) {                        // 收到对端 ICE
-      try { await pc.addIceCandidate(new RTCIceCandidate(p.candidate)); }
-      catch(e){ log("❌ addIceCandidate error: "+e.message); }
-    } else if (p.answer) {
-      // 医生端通常不会收到 answer，这里仅打印
-      log("ℹ️ Unexpected answer on doctor side");
+      log("📩 Offer received from parent");
+      return;
+    }
+
+    // 远端 ICE
+    if (p.candidate) {
+      if (!remoteDescSet) {
+        pendingRemoteCandidates.push(p.candidate);
+        log("🧊 queued remote candidate");
+      } else {
+        try { await pc.addIceCandidate(new RTCIceCandidate(p.candidate)); }
+        catch(e){ log("❌ addIceCandidate error: " + e.message); }
+      }
+      return;
     }
   };
-  ws.onclose = ()=> log("🔌 WS closed");
 }
 
 async function acceptCall(){
   $("#btnAccept").disabled = true;
-  $("#btnHangup").disabled  = false;
-  if (!localStream) await startLocal();
-  if (!pc) mkPeer();
+  $("#btnHangup").disabled = false;
+  await startLocal();
+  ensurePeer();
 
   try{
     await pc.setRemoteDescription({type:"offer", sdp: pendingOffer});
+    remoteDescSet = true;                        // ✅ 标记已设置
     log("📥 setRemoteDescription(offer)");
+
+    // 先把排队的 ICE 全部加进去
+    while (pendingRemoteCandidates.length) {
+      const c = pendingRemoteCandidates.shift();
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
+      catch(e){ log("❌ flush candidate error: " + e.message); }
+    }
+
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-
-    // ✅ 统一 signal 包装发送给 iOS
     ws.send(JSON.stringify({
-      type:"signal",
-      from:"doctor",
-      to:"parent",
+      type:"signal", from:"doctor", to:"parent",
       payload:{ answer:{ type:"answer", sdp: answer.sdp } }
     }));
     log("📤 Answer sent to parent");
-  }catch(e){ log("❌ Answer flow error: "+e.message); }
+  }catch(e){ log("❌ accept flow error: " + e.message); }
 }
 
 function hangup(){
   $("#btnAccept").disabled = true;
-  $("#btnHangup").disabled  = true;
-
-  try { ws && ws.close(); }catch{}
-  if (pc){ pc.getSenders().forEach(s=>s.track && s.track.stop()); pc.close(); pc=null; }
+  $("#btnHangup").disabled = true;
+  remoteDescSet = false;
+  pendingRemoteCandidates.length = 0;
+  if (pc) { try { pc.close(); } catch{} pc = null; }
   if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
   if (localMeter){ localMeter.ctx.close(); localMeter=null; }
   if (remoteMeter){ remoteMeter.ctx.close(); remoteMeter=null; }
   $("#localVideo").srcObject = null;
   $("#remoteVideo").srcObject = null;
-  connectWS(); // 等下一次通话
+  connectWS();
 }
 
 $("#btnStart").onclick = startLocal;
 $("#btnAccept").onclick = acceptCall;
 $("#btnHangup").onclick = hangup;
 
-connectWS();     // 进入页即连接
-startLocal();    // 允许后先准备本地流，接 Offer 更快
+connectWS();
+startLocal();
 </script>
 </body>
 </html>
