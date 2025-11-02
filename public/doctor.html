@@ -27,7 +27,6 @@
 <div class="wrap">
   <h1>👩‍⚕️ Doctor Video Console</h1>
   <div class="grid">
-    <!-- 左：本地 -->
     <div>
       <video id="localVideo" autoplay playsinline muted></video>
       <div class="panel">
@@ -46,10 +45,8 @@
       </div>
     </div>
 
-    <!-- 右：远端 -->
     <div>
       <video id="remoteVideo" autoplay playsinline></video>
-      <!-- 独立音频节点：更稳定的远端声音播放 & 可切换输出设备 -->
       <audio id="remoteAudio" autoplay></audio>
 
       <div class="panel">
@@ -77,13 +74,11 @@
 const $ = s => document.querySelector(s);
 const log = (t)=>{ const el=$("#log"); el.innerHTML += t+"<br/>"; el.scrollTop=el.scrollHeight; };
 
-// ---- State
 let ws, pc, localStream, remoteStream;
 let localCtx=null, remoteCtx=null, localAnalyser=null, remoteAnalyser=null;
 let pendingOffer = null, remoteDescSet = false;
 const pendingRemoteCandidates = [];
 
-// ---- Config
 const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
 const rtcConfig = {
   iceServers: [
@@ -94,7 +89,6 @@ const rtcConfig = {
   ]
 };
 
-// ---- UI refs
 const btnStart = $("#btnStart");
 const btnAccept = $("#btnAccept");
 const btnHangup = $("#btnHangup");
@@ -105,7 +99,6 @@ const aRemote = $("#remoteAudio");
 const barLocal = $("#localBar");
 const barRemote = $("#remoteBar");
 
-// ---- Peer
 function ensurePeer() {
   if (pc) return;
   pc = new RTCPeerConnection(rtcConfig);
@@ -122,14 +115,9 @@ function ensurePeer() {
   pc.ontrack = (e)=>{
     if (!remoteStream) {
       remoteStream = new MediaStream();
-      // 视频展示
       vRemote.srcObject = remoteStream;
-      vRemote.muted = false;
-      vRemote.volume = 1.0;
-      // 音频播放（更稳）
-      aRemote.srcObject = remoteStream;
-      aRemote.volume = 1.0;
-      // 建立扬声器 VU
+      vRemote.muted = false; vRemote.volume = 1.0;
+      aRemote.srcObject = remoteStream; aRemote.volume = 1.0;
       setupRemoteMeter(remoteStream);
       forcePlay();
     }
@@ -139,7 +127,6 @@ function ensurePeer() {
   pc.onconnectionstatechange = ()=> log("🔗 PC state: " + pc.connectionState);
 }
 
-// ---- Local media
 async function startLocal() {
   if (localStream) return;
   try {
@@ -155,7 +142,7 @@ async function startLocal() {
       const sender = pc.addTrack(t, localStream);
       if (t.kind === "video" && sender.getParameters) {
         const p = sender.getParameters(); p.encodings = p.encodings || [{}];
-        p.encodings[0].maxBitrate = 1_200_000; // ~1.2Mbps
+        p.encodings[0].maxBitrate = 1_200_000;
         try { await sender.setParameters(p); } catch {}
       }
     }
@@ -197,7 +184,6 @@ function setupRemoteMeter(stream){
   })();
 }
 
-// ---- WebSocket
 function connectWS(){
   if (ws) try { ws.close(); } catch {}
   ws = new WebSocket(wsURL);
@@ -230,10 +216,9 @@ function connectWS(){
   };
 }
 
-// ---- Call control
 async function acceptCall(){
   btnAccept.disabled = true; btnHangup.disabled = false;
-  await startLocal();          // 解锁音频策略（需要手势）
+  await startLocal();
   ensurePeer();
 
   try{
@@ -271,14 +256,12 @@ function hangup(){
   connectWS();
 }
 
-// ---- 音频解锁 & 输出设备
 async function forcePlay(){
   try { await localCtx?.resume?.(); } catch {}
   try { await remoteCtx?.resume?.(); } catch {}
   try { await vRemote.play(); } catch {}
   try { await aRemote.play(); } catch {}
 }
-
 document.addEventListener("click", forcePlay, { once:true });
 document.addEventListener("keydown", forcePlay, { once:true });
 
@@ -295,7 +278,6 @@ async function listOutputs() {
     });
 
     if (typeof aRemote.setSinkId === "function") {
-      // 默认用系统默认
       try { await aRemote.setSinkId("default"); } catch {}
       outSel.onchange = async (e)=>{
         try {
@@ -313,7 +295,6 @@ async function listOutputs() {
 }
 navigator.mediaDevices?.addEventListener?.("devicechange", listOutputs);
 
-// 简单响铃进行自测
 $("#btnTestBeep").onclick = ()=>{
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const osc = ctx.createOscillator(); const gain = ctx.createGain();
@@ -322,7 +303,6 @@ $("#btnTestBeep").onclick = ()=>{
   osc.start(); setTimeout(()=>{ osc.stop(); ctx.close(); }, 500);
 };
 
-// ---- Wire up
 btnStart.onclick = startLocal;
 btnAccept.onclick = acceptCall;
 btnHangup.onclick = hangup;

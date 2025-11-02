@@ -1,83 +1,118 @@
-// ----------------------
-// ParentDoctorServer WebRTC Signaling Server
-// ----------------------
-import express from "express";
-import { WebSocketServer } from "ws";
-import http from "http";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+// server.js —— Express + Mongo + WS + 静态文件（Render 可直接跑）
+require('dotenv').config();
 
-dotenv.config();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const path = require('path');
+const http = require('http');
+const express = require('express');
+const cors = require('cors');
+const mongoose = require('mongoose');
+const { WebSocketServer } = require('ws');
 
-// ----------------------
-// Express
-// ----------------------
 const app = express();
-const server = http.createServer(app);
+app.use(cors());
+app.use(express.json());
 
-// 静态页面：医生控制台
-app.use(express.static(path.join(__dirname, "public")));
-app.get("/", (_req, res) => {
-  res.sendFile(path.join(__dirname, "public", "doctor.html"));
-});
-
-// ----------------------
-// WebSocket signaling
-// ----------------------
-const wss = new WebSocketServer({ server, path: "/ws" });
-
-// 在线表：id -> ws
-const clients = new Map();
-
-wss.on("connection", (ws) => {
-  console.log("✅ WebSocket client connected");
-
-  ws.on("message", (buf) => {
-    let msg;
-    try { msg = JSON.parse(buf.toString()); }
-    catch (e) { console.error("❌ Invalid JSON:", e); return; }
-
-    // 注册
-    if (msg.type === "register") {
-      ws.id = msg.id || msg.role || `anon_${Math.random().toString(36).slice(2,8)}`;
-      ws.role = msg.role || ws.id;
-      clients.set(ws.id, ws);
-      console.log(`🟢 Registered ${ws.role}: ${ws.id}`);
-      ws.send(JSON.stringify({ type: "registered", id: ws.id }));
-      return;
-    }
-
-    // 兼容：如果直接发 offer/answer/candidate（无外层 type）
-    if (msg.offer || msg.answer || msg.candidate) {
-      msg = { type: "signal", from: msg.from, to: msg.to, payload: msg };
-    }
-
-    // 转发
-    if (msg.type === "signal" && msg.to) {
-      const to = msg.to;
-      const dst = clients.get(to);
-      if (dst && dst.readyState === 1) {
-        dst.send(JSON.stringify({ type: "signal", from: msg.from, to, payload: msg.payload }));
-        console.log(`➡️ Signal relayed from ${msg.from} -> ${to}`);
-      } else {
-        console.log(`⚠️ No live client for id=${to}`);
-      }
-      return;
-    }
-  });
-
-  ws.on("close", () => {
-    if (ws.id && clients.get(ws.id) === ws) {
-      clients.delete(ws.id);
-      console.log(`🔴 ${ws.role || "client"} disconnected: ${ws.id}`);
-    }
-  });
-});
+// 静态资源：把 doctor.html 放到 ./public/doctor.html
+app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Server running on port ${PORT}`);
+
+/* -------------------- Mongo 连接（SRV 优先，失败回退 seedlist） -------------------- */
+const uriCandidates = [
+  process.env.MONGO_URI,
+  process.env.MONGO_URI_SEED,
+].filter(Boolean);
+
+const mongoOpts = {
+  serverSelectionTimeoutMS: 15000,
+  socketTimeoutMS: 30000,
+  w: 'majority',
+};
+
+let lastErr = null;
+async function connectMongo() {
+  for (const uri of uriCandidates) {
+    try {
+      if (!/^mongodb(\+srv)?:\/\//.test(uri)) {
+        throw new Error('MONGO_URI 格式不正确');
+      }
+      console.log(`\n[Mongo] 尝试连接：${uri.startsWith('mongodb+srv://') ? 'SRV' : 'Seedlist'} …`);
+      await mongoose.connect(uri, mongoOpts);
+      console.log('[Mongo] ✅ 连接成功');
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.error(`[Mongo] ❌ 连接失败：${err.message}`);
+    }
+  }
+  console.error('[Mongo] 所有候选连接串均失败，稍后自动重试…');
+}
+mongoose.connection.on('connected',   () => console.log('[Mongo] connected'));
+mongoose.connection.on('disconnected',()=> console.log('[Mongo] disconnected'));
+mongoose.connection.on('error',       (e) => console.error('[Mongo] error:', e.message));
+
+connectMongo();
+setInterval(() => {
+  if (mongoose.connection.readyState !== 1) connectMongo();
+}, 20000);
+
+const stateMap = { 0:'disconnected', 1:'connected', 2:'connecting', 3:'disconnecting' };
+
+/* -------------------------- HTTP 路由 -------------------------- */
+app.get('/', (_req, res) => {
+  res.send('ParentDoctor Server is running.');
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    ok: true,
+    mongoState: stateMap[mongoose.connection.readyState] || 'unknown',
+    time: new Date().toISOString(),
+    lastError: lastErr ? String(lastErr.message) : null,
+  });
+});
+
+// 首次写入测试（可用于自动建库/集合）
+const TestSchema = new mongoose.Schema({ at: Date }, { collection: 'health_tests' });
+const TestModel  = mongoose.model('HealthTest', TestSchema);
+app.post('/api/test-write', async (_req, res) => {
+  try { const doc = await TestModel.create({ at: new Date() }); res.json({ ok:true, id:doc._id }); }
+  catch (e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
+/* -------------------------- WebSocket 信令 -------------------------- */
+const server = http.createServer(app);
+const { WebSocket } = require('ws');
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+const peers = new Map(); // id -> ws
+wss.on('connection', (ws) => {
+  let myId = null;
+
+  ws.on('message', (buf) => {
+    try {
+      const msg = JSON.parse(buf.toString() || '{}');
+
+      if (msg.type === 'register') {
+        myId = String(msg.id || ('anon_' + Date.now()));
+        peers.set(myId, ws);
+        ws.send(JSON.stringify({ type:'registered', id: myId }));
+        return;
+      }
+
+      if (msg.type === 'signal' && msg.to) {
+        const peer = peers.get(String(msg.to));
+        if (peer && peer.readyState === WebSocket.OPEN) {
+          peer.send(JSON.stringify(msg));
+        }
+        return;
+      }
+    } catch (_) {}
+  });
+
+  ws.on('close', () => { if (myId) peers.delete(myId); });
+});
+
+server.listen(PORT, () => {
+  console.log(`\n🚀 Server running on port ${PORT}\n`);
 });
