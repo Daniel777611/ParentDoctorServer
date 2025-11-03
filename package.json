@@ -1,7 +1,7 @@
 {
   "name": "parent-doctor-server",
-  "version": "1.0.0",
-  "description": "Node.js server for ParentDoctor (Express + MongoDB + WebSocket signaling)",
+  "version": "2.0.0",
+  "description": "ParentDoctor Server (Express + PostgreSQL + WebSocket)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,7 +11,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "mongoose": "^8.5.1",
+    "pg": "^8.12.0",
     "ws": "^8.18.0"
   }
 }
