@@ -17,46 +17,52 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 10000;
 
-/* -------------------- Mongo 连接（SRV 优先，失败回退 seedlist） -------------------- */
-const uriCandidates = [
-  process.env.MONGO_URI,
-  process.env.MONGO_URI_SEED,
-].filter(Boolean);
+// ====== MongoDB ======
+const mongoCandidates = [];
+if (process.env.MONGO_URI) mongoCandidates.push(process.env.MONGO_URI.trim());
+if (process.env.MONGO_URI_SEED) mongoCandidates.push(process.env.MONGO_URI_SEED.trim());
 
-const mongoOpts = {
-  serverSelectionTimeoutMS: 15000,
-  socketTimeoutMS: 30000,
-  w: 'majority',
-};
+let lastMongoError = null;
 
-let lastErr = null;
+mongoose.set('strictQuery', false);
+
 async function connectMongo() {
-  for (const uri of uriCandidates) {
+  for (const uri of mongoCandidates) {
     try {
-      if (!/^mongodb(\+srv)?:\/\//.test(uri)) {
-        throw new Error('MONGO_URI 格式不正确');
-      }
-      console.log(`\n[Mongo] 尝试连接：${uri.startsWith('mongodb+srv://') ? 'SRV' : 'Seedlist'} …`);
-      await mongoose.connect(uri, mongoOpts);
-      console.log('[Mongo] ✅ 连接成功');
+      console.log(`[Mongo] Trying ${uri.startsWith('mongodb+srv://') ? 'SRV' : 'Seedlist'} …`);
+      await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 15000,
+        socketTimeoutMS: 20000,
+        maxPoolSize: 10,
+        family: 4, // 优先 IPv4，避免某些网络环境解析异常
+      });
+      console.log('✅ MongoDB connected.');
+      lastMongoError = null;
       return;
     } catch (err) {
-      lastErr = err;
-      console.error(`[Mongo] ❌ 连接失败：${err.message}`);
+      const msg = `${err.code || err.name || 'Error'}: ${err.message}`;
+      console.error('[Mongo] connect failed:', msg);
+      lastMongoError = msg;
     }
   }
-  console.error('[Mongo] 所有候选连接串均失败，稍后自动重试…');
+  console.error('[Mongo] All candidates failed, will retry in 10s…');
+  setTimeout(connectMongo, 10000);
 }
-mongoose.connection.on('connected',   () => console.log('[Mongo] connected'));
-mongoose.connection.on('disconnected',()=> console.log('[Mongo] disconnected'));
-mongoose.connection.on('error',       (e) => console.error('[Mongo] error:', e.message));
 
+mongoose.connection.on('disconnected', () => console.warn('[Mongo] disconnected'));
 connectMongo();
-setInterval(() => {
-  if (mongoose.connection.readyState !== 1) connectMongo();
-}, 20000);
 
-const stateMap = { 0:'disconnected', 1:'connected', 2:'connecting', 3:'disconnecting' };
+// 健康检查
+app.get('/api/health', (req, res) => {
+  const states = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  res.json({
+    ok: true,
+    mongoState: states[mongoose.connection.readyState] || String(mongoose.connection.readyState),
+    time: new Date().toISOString(),
+    lastError: lastMongoError,
+  });
+});
+
 
 /* -------------------------- HTTP 路由 -------------------------- */
 app.get('/', (_req, res) => {
