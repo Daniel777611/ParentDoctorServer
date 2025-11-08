@@ -47,9 +47,13 @@ app.use("/uploads", express.static("/opt/render/project/src/uploads"));
 
 
 // ====== 文件上传设置 ======
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+// ✅ 改为 Render 持久化磁盘路径
+const uploadDir = "/opt/render/project/src/uploads";
 
+// ✅ 若不存在则自动创建
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+// ✅ 使用云端路径作为 multer 存储目录
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -58,6 +62,10 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage });
+
+// ✅ 静态访问 uploads 文件
+app.use("/uploads", express.static(uploadDir));
+
 
 
 
