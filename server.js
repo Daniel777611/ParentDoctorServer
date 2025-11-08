@@ -188,7 +188,8 @@ app.get("/", (_req, res) => {
 // ✅ 修复 Render 静态文件无法访问的问题
 // 直接由 Node 手动读取并返回上传文件
 app.get("/uploads/*", (req, res) => {
-  const filePath = path.join("/opt/render/project/src", req.path);
+  const relativePath = req.path.replace(/^\/uploads/, "");  // 去掉多余的 /uploads
+  const filePath = path.join("/opt/render/project/src/uploads", relativePath);
   console.log("📂 Requesting file:", filePath);
 
   fs.access(filePath, fs.constants.F_OK, (err) => {
@@ -199,6 +200,7 @@ app.get("/uploads/*", (req, res) => {
     res.sendFile(filePath);
   });
 });
+
 
 
 /* -------------------------- WebSocket 信令 -------------------------- */
