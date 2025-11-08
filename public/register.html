@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doctor Registration | ParentDoctor</title>
+  <style>
+    body {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+      padding: 40px 50px;
+      width: 380px;
+      box-sizing: border-box;
+    }
+    h2 {
+      text-align: center;
+      color: #222;
+      font-size: 20px;
+      margin-bottom: 30px;
+    }
+    label {
+      font-size: 14px;
+      color: #333;
+      display: block;
+      margin-top: 15px;
+      margin-bottom: 6px;
+    }
+    input[type="text"], input[type="file"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    button {
+      width: 100%;
+      margin-top: 30px;
+      background: #333;
+      color: #fff;
+      border: none;
+      padding: 12px 0;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #000;
+    }
+    .msg {
+      text-align: center;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .preview-box {
+    margin-top: 8px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .preview-box img {
+    max-width: 150px;
+    max-height: 100px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    object-fit: cover;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .preview-box span {
+    font-size: 13px;
+    color: #555;
+  }
+
+  .upload-group {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .upload-btn {
+  outline: none;
+  }
+
+  .plus-btn {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #999;
+  font-size: 20px;
+  line-height: 26px;
+  text-align: center;
+  background-color: #fff;
+  transition: all 0.2s ease;
+  outline: none;            /* 🔹取消点击时的小框 */
+  box-shadow: none;         /* 🔹防止出现蓝色发光边框 */
+  }
+
+  .plus-btn:focus {
+  outline: none;            /* 🔹防止 tab 聚焦时出现虚线 */
+  box-shadow: none;
+  }
+
+  .upload-btn:focus-within {
+  outline: none;
+  }
+
+  .plus-btn:hover {
+    background-color: #f5f5f5;
+  }
+
+  .preview-minimal {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #333;
+  }
+
+  .preview-minimal img {
+    display: block;
+    width: 80px;
+    height: 60px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    object-fit: cover;
+    margin-top: 4px;
+  }
+
+  .preview-minimal span {
+    color: green;
+    font-size: 12px;
+    margin-left: 4px;
+  }
+
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Doctor Registration</h2>
+    <form id="doctorForm" enctype="multipart/form-data">
+      <label for="first_name">First Name</label>
+      <input type="text" id="first_name" required />
+
+      <label for="last_name">Last Name</label>
+      <input type="text" id="last_name" required />
+
+      <label for="major">Major</label>
+      <input type="text" id="major" placeholder="e.g., Pediatrics" required />
+
+
+      <label for="nation">Nation</label>
+      <input type="text" id="nation" required />
+
+      <label for="email">Email</label>
+      <input type="text" id="email" required />
+
+      <label for="phone">Phone</label>
+      <input type="text" id="phone" />
+
+
+      <div class="upload-group">
+        <label>Upload your ID</label>
+        <label class="upload-btn">
+            <input type="file" id="id_upload" name="id_card" accept="image/*,application/pdf" hidden>
+            <span class="plus-btn">＋</span>
+        </label>
+        <div id="id_preview" class="preview-minimal"></div>
+        </div>
+
+        <div class="upload-group">
+        <label>Upload Medical License</label>
+        <label class="upload-btn">
+            <input type="file" id="license_upload" name="medical_license" accept="image/*,application/pdf" hidden>
+            <span class="plus-btn">＋</span>
+        </label>
+        <div id="license_preview" class="preview-minimal"></div>
+
+      <button type="submit">SUBMIT</button>
+    </form>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <script>
+  const form = document.getElementById('doctorForm');
+  const msg = document.getElementById('msg');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    msg.textContent = "Submitting...";
+
+    const formData = new FormData();
+    formData.append('first_name', document.getElementById('first_name').value);
+    formData.append('last_name', document.getElementById('last_name').value);
+    formData.append('major', document.getElementById('major').value);
+    formData.append('nation', document.getElementById('nation').value);
+    formData.append('email', document.getElementById('email').value);
+    formData.append('phone', document.getElementById('phone').value);
+    formData.append('id_card', document.getElementById('id_upload').files[0]);
+    formData.append('medical_license', document.getElementById('license_upload').files[0]);
+
+    try {
+      const res = await fetch('/api/doctors', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        msg.style.color = 'green';
+        msg.textContent = "✅ Registration successful. Redirecting...";
+        setTimeout(() => window.location.href = '/thankyou.html', 1500);
+      } else {
+        msg.style.color = 'red';
+        msg.textContent = "❌ " + (result.message || "Registration failed.");
+      }
+    } catch (err) {
+      msg.style.color = 'red';
+      msg.textContent = "❌ Network error.";
+    }
+  });
+  function showPreview(input, previewId) {
+    const file = input.files[0];
+    const previewBox = document.getElementById(previewId);
+    previewBox.innerHTML = ""; // 清空旧内容
+
+    if (!file) return;
+
+    // 如果是图片文件
+    if (file.type.startsWith("image/")) {
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+      previewBox.appendChild(img);
+    }
+    // 如果是PDF或其他类型文件
+    else {
+      const span = document.createElement("span");
+      span.textContent = `📄 ${file.name}`;
+      previewBox.appendChild(span);
+    }
+    previewBox.insertAdjacentHTML('beforeend', '<span style="color:green;margin-left:5px;"> Uploaded ✔</span>');
+
+  }
+
+  // 监听文件选择事件
+  document.getElementById("id_upload").addEventListener("change", (e) => {
+    showPreview(e.target, "id_preview");
+  });
+
+  document.getElementById("license_upload").addEventListener("change", (e) => {
+    showPreview(e.target, "license_preview");
+  });
+
+  function showMinimalPreview(input, previewId) {
+    const file = input.files[0];
+    const previewBox = document.getElementById(previewId);
+    previewBox.innerHTML = "";
+
+    if (!file) return;
+
+    if (file.type.startsWith("image/")) {
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+      previewBox.appendChild(img);
+    } else {
+      previewBox.textContent = `📄 ${file.name}`;
+    }
+
+    const ok = document.createElement("span");
+    ok.textContent = "✔ Uploaded";
+    previewBox.appendChild(ok);
+  }
+
+  // 文件选择监听
+  document.getElementById("id_upload").addEventListener("change", (e) => {
+    showMinimalPreview(e.target, "id_preview");
+  });
+
+  document.getElementById("license_upload").addEventListener("change", (e) => {
+    showMinimalPreview(e.target, "license_preview");
+  });
+</script>
+
+</body>
+</html>
