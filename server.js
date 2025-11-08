@@ -189,7 +189,7 @@ app.get("/", (_req, res) => {
 // 直接由 Node 手动读取并返回上传文件
 app.get("/uploads/*", (req, res) => {
   const relativePath = req.path.replace(/^\/uploads/, "");  // 去掉多余的 /uploads
-  const filePath = path.join("/opt/render/project/src/uploads", relativePath);
+  const filePath = path.resolve("./uploads" + req.path.replace("/uploads", ""));
   console.log("📂 Requesting file:", filePath);
 
   fs.access(filePath, fs.constants.F_OK, (err) => {
