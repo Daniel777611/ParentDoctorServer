@@ -41,6 +41,11 @@ const pool = new Pool({
   }
 })();
 
+
+// ✅ 静态访问 uploads 文件（Render 云端磁盘路径）
+app.use("/uploads", express.static("/opt/render/project/src/uploads"));
+
+
 // ====== 文件上传设置 ======
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
@@ -54,8 +59,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// 静态访问 uploads 文件
-app.use("/uploads", express.static(uploadDir));
+
 
 
 
