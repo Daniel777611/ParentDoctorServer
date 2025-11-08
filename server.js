@@ -117,9 +117,10 @@ app.post(
       // ✅ 生成唯一 doctor_id
       const doctor_id = "doc_" + uuidv4().split("-")[0];
 
-      // ✅ 为该医生创建独立文件夹
-      const doctorDir = path.join(__dirname, "uploads", doctor_id);
+      // ✅ 为该医生创建独立文件夹（Render 持久化路径）
+      const doctorDir = path.join("/opt/render/project/src/uploads", doctor_id);
       if (!fs.existsSync(doctorDir)) fs.mkdirSync(doctorDir, { recursive: true });
+
 
       // ✅ 将上传的文件分类保存（id_card → /id/ ，license → /license/）
       const saveFileToCategory = (file, category) => {
