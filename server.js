@@ -184,9 +184,27 @@ app.get("/", (_req, res) => {
   res.send("ParentDoctor Server (PostgreSQL version) is running.");
 });
 
+
+// ✅ 修复 Render 静态文件无法访问的问题
+// 直接由 Node 手动读取并返回上传文件
+app.get("/uploads/*", (req, res) => {
+  const filePath = path.join("/opt/render/project/src", req.path);
+  console.log("📂 Requesting file:", filePath);
+
+  fs.access(filePath, fs.constants.F_OK, (err) => {
+    if (err) {
+      console.error("❌ File not found:", filePath);
+      return res.status(404).send("File not found");
+    }
+    res.sendFile(filePath);
+  });
+});
+
+
 /* -------------------------- WebSocket 信令 -------------------------- */
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
+
 
 const peers = new Map(); // id -> ws
 wss.on("connection", (ws) => {
