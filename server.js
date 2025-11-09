@@ -10,7 +10,22 @@ const { Pool } = require("pg");
 const multer = require("multer");
 const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const app = express();
+const upload = multer({ storage: multer.memoryStorage() }); // ✅ 直接从内存上传到R2
+
+
+// ✅ Cloudflare R2 Client
+const r2 = new S3Client({
+  region: "auto",
+  endpoint: process.env.R2_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  },
+});
+const bucket = process.env.R2_BUCKET_NAME;
+
 
 
 
@@ -39,32 +54,7 @@ const pool = new Pool({
   } catch (err) {
     console.error("❌ PostgreSQL connection failed:", err.message);
   }
-})();
-
-
-// ✅ 静态访问 uploads 文件（Render 云端磁盘路径）
-app.use("/uploads", express.static("/opt/render/project/src/uploads"));
-
-
-// ====== 文件上传设置 ======
-// ✅ 改为 Render 持久化磁盘路径
-const uploadDir = "/opt/render/project/src/uploads";
-
-// ✅ 若不存在则自动创建
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-// ✅ 使用云端路径作为 multer 存储目录
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${file.fieldname}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
-  },
-});
-const upload = multer({ storage });
-
-// ✅ 静态访问 uploads 文件
-app.use("/uploads", express.static(uploadDir));
+})
 
 
 
@@ -117,28 +107,29 @@ app.post(
       // ✅ 生成唯一 doctor_id
       const doctor_id = "doc_" + uuidv4().split("-")[0];
 
-      // ✅ 为该医生创建独立文件夹（Render 持久化路径）
-      const doctorDir = path.join("/opt/render/project/src/uploads", doctor_id);
-      if (!fs.existsSync(doctorDir)) fs.mkdirSync(doctorDir, { recursive: true });
+      // ✅ 上传文件到 Cloudflare R2
+async function uploadToR2(file, doctorId, category) {
+  if (!file) return null;
+
+  const key = `HealthAssistance/doctor/doctorsInfo/${doctorId}/${category}/${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
+  const fileBuffer = fs.readFileSync(file.path);
+
+  const command = new PutObjectCommand({
+  Bucket: bucket,
+  Key: key,
+  Body: file.buffer, // ✅ 改成直接使用内存中的文件buffer
+  ContentType: file.mimetype,
+});
 
 
-      // ✅ 将上传的文件分类保存（id_card → /id/ ，license → /license/）
-      const saveFileToCategory = (file, category) => {
-        if (!file) return null;
-        const categoryDir = path.join(doctorDir, category);
-        if (!fs.existsSync(categoryDir)) fs.mkdirSync(categoryDir, { recursive: true });
+  await r2.send(command);
+  console.log(`✅ Uploaded: ${key}`);
+  return `https://${process.env.R2_ACCOUNT_ID}.r2.dev/${key}`;
+}
 
-        const safeName = `${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
-        const newPath = path.join(categoryDir, safeName);
-        fs.renameSync(file.path, newPath);
-
-        // ✅ 数据库中保存相对路径，AI 审核读取时更方便
-        return `/uploads/${doctor_id}/${category}/${safeName}`;
-      };
-
-      // ✅ 按分类分别保存身份证件与医师执照
-      const idCardPath = saveFileToCategory(req.files["id_card"]?.[0], "id");
-      const licensePath = saveFileToCategory(req.files["medical_license"]?.[0], "license");
+// ✅ 上传身份证件与行医执照文件
+const idCardPath = await uploadToR2(req.files["id_card"]?.[0], doctor_id, "id");
+const licensePath = await uploadToR2(req.files["medical_license"]?.[0], doctor_id, "license");
 
 
       // ✅ 插入数据库（为未来AI审核、通知系统预留字段）
@@ -182,25 +173,7 @@ app.post("/api/test-write", async (_req, res) => {
 // ✅ 浏览器访问根路径时的默认返回
 app.get("/", (_req, res) => {
   res.send("ParentDoctor Server (PostgreSQL version) is running.");
-});
-
-
-// ✅ 修复 Render 静态文件无法访问的问题
-// 直接由 Node 手动读取并返回上传文件
-app.get("/uploads/*", (req, res) => {
-  const relativePath = req.path.replace(/^\/uploads/, "");  // 去掉多余的 /uploads
-  const filePath = path.resolve("./uploads" + req.path.replace("/uploads", ""));
-  console.log("📂 Requesting file:", filePath);
-
-  fs.access(filePath, fs.constants.F_OK, (err) => {
-    if (err) {
-      console.error("❌ File not found:", filePath);
-      return res.status(404).send("File not found");
-    }
-    res.sendFile(filePath);
-  });
-});
-
+})
 
 
 /* -------------------------- WebSocket 信令 -------------------------- */
