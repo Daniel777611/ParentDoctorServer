@@ -112,20 +112,20 @@ async function uploadToR2(file, doctorId, category) {
   if (!file) return null;
 
   const key = `HealthAssistance/doctor/doctorsInfo/${doctorId}/${category}/${Date.now()}_${file.originalname.replace(/\s+/g, "_")}`;
-  const fileBuffer = fs.readFileSync(file.path);
 
+  // ✅ 直接使用内存中的文件 buffer（Render 不写磁盘）
   const command = new PutObjectCommand({
-  Bucket: bucket,
-  Key: key,
-  Body: file.buffer, // ✅ 改成直接使用内存中的文件buffer
-  ContentType: file.mimetype,
-});
-
+    Bucket: bucket,
+    Key: key,
+    Body: file.buffer,
+    ContentType: file.mimetype,
+  });
 
   await r2.send(command);
   console.log(`✅ Uploaded: ${key}`);
   return `https://${process.env.R2_ACCOUNT_ID}.r2.dev/${key}`;
 }
+
 
 // ✅ 上传身份证件与行医执照文件
 const idCardPath = await uploadToR2(req.files["id_card"]?.[0], doctor_id, "id");
