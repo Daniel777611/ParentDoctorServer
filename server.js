@@ -14,13 +14,13 @@ const { runAIReview } = require("./aiReview");
 
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() }); // ✅ 文件直接存内存（Render 无需本地写入）
+const upload = multer({ storage: multer.memoryStorage() }); // ✅ Store files in memory (Render doesn't need local write)
 
-// ✅ Cloudflare R2 客户端
+// ✅ Cloudflare R2 Client
 const r2 = new S3Client({
   region: "auto",
-  endpoint: process.env.R2_ENDPOINT,                   // 形如 https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-   forcePathStyle: true,                                 // ★ R2 必需，避免 403 Unauthorized
+  endpoint: process.env.R2_ENDPOINT,                   // Format: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   forcePathStyle: true,                                 // ★ Required for R2, avoid 403 Unauthorized
    credentials: {
      accessKeyId: process.env.R2_ACCESS_KEY_ID,
      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
@@ -28,7 +28,7 @@ const r2 = new S3Client({
  });
 const bucket = process.env.R2_BUCKET_NAME;
 
-// ✅ 基础设置
+// ✅ Basic Settings
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
@@ -39,12 +39,12 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// ✅ PostgreSQL 初始化
+// ✅ PostgreSQL Initialization
 (async () => {
   try {
     const client = await pool.connect();
     console.log("✅ PostgreSQL connected successfully.");
-    // doctor 表（如果不存在则自动创建）
+    // doctor table (auto-create if not exists)
     await client.query(`
       CREATE TABLE IF NOT EXISTS doctor (
         id SERIAL PRIMARY KEY,
@@ -71,7 +71,7 @@ const pool = new Pool({
   }
 })();
 
-// ✅ 健康检查
+// ✅ Health Check
 app.get("/api/health", async (_req, res) => {
   try {
     const { rows } = await pool.query("SELECT NOW() as now");
@@ -81,7 +81,7 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
-// ✅ 获取医生列表
+// ✅ Get Doctor List
 app.get("/api/doctors", async (_req, res) => {
   try {
     const result = await pool.query("SELECT * FROM doctor ORDER BY id ASC");
@@ -92,7 +92,7 @@ app.get("/api/doctors", async (_req, res) => {
   }
 });
 
-// ✅ 上传文件到 Cloudflare R2
+// ✅ Upload File to Cloudflare R2
 async function uploadToR2(file, doctorId, category) {
   if (!file) return null;
 
@@ -102,7 +102,7 @@ async function uploadToR2(file, doctorId, category) {
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: key,
-      Body: file.buffer, // ✅ 从内存直接上传
+      Body: file.buffer, // ✅ Upload directly from memory
       ContentType: file.mimetype,
     });
 
@@ -115,7 +115,7 @@ async function uploadToR2(file, doctorId, category) {
   }
 }
 
-// ✅ 医生注册接口
+// ✅ Doctor Registration Endpoint
 app.post(
   "/api/doctors",
   upload.fields([
@@ -130,14 +130,14 @@ app.post(
         return res.status(400).json({ success: false, message: "Missing required fields" });
       }
 
-      // 生成唯一 doctor_id
+      // Generate unique doctor_id
       const doctor_id = "doc_" + uuidv4().split("-")[0];
 
-      // 上传文件
+      // Upload files
       const idCardPath = await uploadToR2(req.files["id_card"]?.[0], doctor_id, "id");
       const licensePath = await uploadToR2(req.files["medical_license"]?.[0], doctor_id, "license");
 
-      // 写入数据库
+      // Insert into database
       const result = await pool.query(
         `INSERT INTO doctor (
           doctor_id, first_name, last_name, nation, major, email, phone, id_card, medical_license,
@@ -147,7 +147,7 @@ app.post(
         [doctor_id, first_name, last_name, nation, major || "", email || "", phone || "", idCardPath, licensePath]
       );
 
-      // ✅ 调用 AI 审查模块（同步等待执行）
+      // ✅ Call AI Review Module (synchronous execution)
         await runAIReview(result.rows[0]);
 
 
@@ -164,7 +164,7 @@ app.post(
   }
 );
 
-// ✅ 测试写入
+// ✅ Test Write
 app.post("/api/test-write", async (_req, res) => {
   try {
     const { rows } = await pool.query("INSERT INTO health_tests DEFAULT VALUES RETURNING id;");
@@ -174,12 +174,12 @@ app.post("/api/test-write", async (_req, res) => {
   }
 });
 
-// ✅ 根路由
+// ✅ Root Route
 app.get("/", (_req, res) => {
   res.send("ParentDoctor Server (PostgreSQL + Cloudflare R2) is running.");
 });
 
-// ✅ WebSocket 信令服务器
+// ✅ WebSocket Signaling Server
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 
@@ -215,20 +215,20 @@ wss.on("connection", (ws) => {
 });
 
 
-// ✅ 启动时自动审查所有未审核医生（仅启动时执行一次）
+// ✅ Auto-review all pending doctors on startup (executed once on startup)
 (async () => {
   try {
     const { rows } = await pool.query("SELECT * FROM doctor WHERE ai_review_status='pending'");
     if (rows.length === 0) {
-      console.log("🤖 启动时检查：没有待审查的医生。");
+      console.log("🤖 Startup check: No pending doctors to review.");
     } else {
       for (const doctor of rows) {
         await runAIReview(doctor);
       }
-      console.log(`🤖 启动时已自动审查 ${rows.length} 位医生。`);
+      console.log(`🤖 Auto-reviewed ${rows.length} doctor(s) on startup.`);
     }
   } catch (err) {
-    console.error("❌ 启动时自动审查失败:", err.message);
+    console.error("❌ Auto-review on startup failed:", err.message);
   }
 })();
 

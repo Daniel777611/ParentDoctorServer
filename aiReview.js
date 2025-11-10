@@ -1,18 +1,19 @@
-// aiReview.js —— 模拟 AI 审查模块
-// 未来可以在这里接入真正的 AI 模型（如 OpenAI、Claude、Gemini 等）
+// aiReview.js —— AI Review Module
+// In the future, you can integrate real AI models here (e.g., OpenAI, Claude, Gemini, etc.)
 
 require("dotenv").config();
 const { Pool } = require("pg");
+const { sendReviewNotification } = require("./notification");
 
-// ✅ 连接数据库（使用同一条连接字符串）
+// ✅ Database connection (using the same connection string)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
 /**
- * 模拟AI审查函数
- * @param {object} doctor - 包含医生的完整数据
+ * AI Review Function
+ * @param {object} doctor - Complete doctor data object
  */
 async function runAIReview(doctor) {
   try {
@@ -21,7 +22,7 @@ async function runAIReview(doctor) {
     let notes = "";
     let verified = false;
 
-    // 模拟 AI 审查逻辑
+    // Simulated AI review logic
     if (doctor.id_card && doctor.medical_license) {
       status = "approved";
       confidence = 0.98;
@@ -34,7 +35,7 @@ async function runAIReview(doctor) {
       verified = false;
     }
 
-    // ✅ 更新数据库
+    // ✅ Update database
     await pool.query(
       `UPDATE doctor 
        SET ai_review_status=$1, ai_confidence=$2, ai_review_notes=$3, verified=$4
@@ -43,21 +44,38 @@ async function runAIReview(doctor) {
     );
 
     console.log(`🤖 [AI REVIEW] Doctor ${doctor.doctor_id} => ${status}`);
+
+    // ✅ Send review result notification (Email + SMS)
+    try {
+      const notificationResult = await sendReviewNotification(doctor, status, notes);
+      if (notificationResult.emailSent) {
+        console.log(`📧 Email notification sent to ${doctor.email}`);
+      }
+      if (notificationResult.smsSent) {
+        console.log(`📱 SMS notification sent to ${doctor.phone}`);
+      }
+      if (!notificationResult.emailSent && !notificationResult.smsSent) {
+        console.log(`⚠️  No notifications sent (email or phone may be empty, or service not configured)`);
+      }
+    } catch (notifyErr) {
+      console.error("❌ Notification sending failed:", notifyErr.message);
+      // Notification failure does not affect review process, only log error
+    }
   } catch (err) {
     console.error("❌ AI Review error:", err.message);
   }
 }
 
 /**
- * ✅ 未来接入 AI 模型接口（预留）
- * 在这里调用真正的 AI 服务，例如：
+ * ✅ Future AI model integration (reserved)
+ * Call real AI services here, for example:
  * - OpenAI API
- * - 自建 AI 审查模型
+ * - Custom AI review model
  */
 async function analyzeWithAI(doctorData) {
-  // TODO: 调用 AI 审查接口
+  // TODO: Call AI review API
   // const response = await fetch("https://api.openai.com/v1/...", {...})
-  // return AI 审查结果
+  // return AI review result
   return { approved: true, confidence: 0.98, notes: "Mocked AI result" };
 }
 

@@ -108,12 +108,12 @@
   text-align: center;
   background-color: #fff;
   transition: all 0.2s ease;
-  outline: none;            /* 🔹取消点击时的小框 */
-  box-shadow: none;         /* 🔹防止出现蓝色发光边框 */
+  outline: none;            /* Remove focus outline */
+  box-shadow: none;         /* Prevent blue glow border */
   }
 
   .plus-btn:focus {
-  outline: none;            /* 🔹防止 tab 聚焦时出现虚线 */
+  outline: none;            /* Prevent dotted line on tab focus */
   box-shadow: none;
   }
 
@@ -236,17 +236,17 @@
   function showPreview(input, previewId) {
     const file = input.files[0];
     const previewBox = document.getElementById(previewId);
-    previewBox.innerHTML = ""; // 清空旧内容
+    previewBox.innerHTML = ""; // Clear old content
 
     if (!file) return;
 
-    // 如果是图片文件
+    // If it's an image file
     if (file.type.startsWith("image/")) {
       const img = document.createElement("img");
       img.src = URL.createObjectURL(file);
       previewBox.appendChild(img);
     }
-    // 如果是PDF或其他类型文件
+    // If it's a PDF or other file type
     else {
       const span = document.createElement("span");
       span.textContent = `📄 ${file.name}`;
@@ -256,7 +256,7 @@
 
   }
 
-  // 监听文件选择事件
+  // Listen for file selection events
   document.getElementById("id_upload").addEventListener("change", (e) => {
     showPreview(e.target, "id_preview");
   });
@@ -285,7 +285,7 @@
     previewBox.appendChild(ok);
   }
 
-  // 文件选择监听
+  // File selection listener
   document.getElementById("id_upload").addEventListener("change", (e) => {
     showMinimalPreview(e.target, "id_preview");
   });

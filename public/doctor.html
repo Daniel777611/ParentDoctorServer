@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -31,16 +31,16 @@
       <video id="localVideo" autoplay playsinline muted></video>
       <div class="panel">
         <div class="row" style="margin-bottom:8px">
-          <span class="label">本地麦克风</span>
+          <span class="label">Local Microphone</span>
           <div class="meter"><div id="localBar" class="bar"></div></div>
         </div>
         <div class="row" style="margin-bottom:8px">
-          <span class="label">本地摄像头</span>
-          <button id="btnStart" class="btn">启用设备</button>
+          <span class="label">Local Camera</span>
+          <button id="btnStart" class="btn">Enable Devices</button>
         </div>
         <div class="row" style="gap:12px">
-          <button id="btnAccept" class="btn green" disabled>接听</button>
-          <button id="btnHangup" class="btn red" disabled>挂断</button>
+          <button id="btnAccept" class="btn green" disabled>Accept</button>
+          <button id="btnHangup" class="btn red" disabled>Hang Up</button>
         </div>
       </div>
     </div>
@@ -51,19 +51,19 @@
 
       <div class="panel">
         <div class="row" style="margin-bottom:8px">
-          <span class="label">扬声器电平</span>
+          <span class="label">Speaker Level</span>
           <div class="meter"><div id="remoteBar" class="bar"></div></div>
         </div>
 
         <div class="row" style="margin-bottom:8px">
-          <span class="label">输出设备</span>
+          <span class="label">Output Device</span>
           <select id="outSel" class="btn"></select>
-          <button id="btnTestBeep" class="btn">测试响铃</button>
+          <button id="btnTestBeep" class="btn">Test Beep</button>
         </div>
 
         <div class="log" id="log"></div>
         <div class="hint">
-          若黑屏/卡顿/无声：检查浏览器相机与麦克风权限；确保标签页未被静音；首次需点击按钮以解锁音频；公司网络可能屏蔽 UDP（已内置 TURN 走 443）。
+          If black screen/freezing/no sound: Check browser camera and microphone permissions; Ensure tab is not muted; Click button to unlock audio on first use; Corporate networks may block UDP (TURN over 443 is included).
         </div>
       </div>
     </div>
@@ -150,7 +150,7 @@ async function startLocal() {
     log("🎥 Local stream ready.");
   } catch(err){
     log("❌ getUserMedia error: " + err.message);
-    alert("需要相机/麦克风权限");
+    alert("Camera/microphone permission required");
   }
 }
 
@@ -273,7 +273,7 @@ async function listOutputs() {
     outs.forEach((d, i) => {
       const opt = document.createElement("option");
       opt.value = d.deviceId;
-      opt.text  = d.label || `扬声器 ${i+1}`;
+      opt.text  = d.label || `Speaker ${i+1}`;
       outSel.appendChild(opt);
     });
 
@@ -282,16 +282,16 @@ async function listOutputs() {
       outSel.onchange = async (e)=>{
         try {
           await aRemote.setSinkId(e.target.value || "default");
-          log("🔊 输出设备：" + (e.target.selectedOptions[0]?.text || e.target.value));
+          log("🔊 Output device: " + (e.target.selectedOptions[0]?.text || e.target.value));
         } catch(err) {
-          log("❌ setSinkId 失败：" + err.message);
+          log("❌ setSinkId failed: " + err.message);
         }
       };
     } else {
-      log("ℹ️ 当前浏览器不支持 setSinkId（Safari 等），将使用系统默认输出设备。");
+      log("ℹ️ Current browser does not support setSinkId (Safari, etc.), will use system default output device.");
       outSel.disabled = true;
     }
-  } catch(e){ log("❌ 枚举音频设备失败：" + e.message); }
+  } catch(e){ log("❌ Failed to enumerate audio devices: " + e.message); }
 }
 navigator.mediaDevices?.addEventListener?.("devicechange", listOutputs);
 
