@@ -28,6 +28,22 @@ SMTP_FROM=ParentDoctor <noreply@parentdoctor.com>
 
 **Common SMTP Providers:**
 
+#### Outlook/Hotmail
+```
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=Yaxindesign@outlook.com
+SMTP_PASS=your_password
+SMTP_FROM=ParentDoctor <Yaxindesign@outlook.com>
+```
+
+**Note:** For Outlook/Hotmail:
+- Use `smtp-mail.outlook.com` as the SMTP host
+- Port 587 with STARTTLS (SMTP_SECURE=false)
+- Use your full email address as SMTP_USER
+- Use your regular Outlook password (or App Password if 2FA is enabled)
+
 #### Gmail
 ```
 SMTP_HOST=smtp.gmail.com
@@ -92,15 +108,25 @@ APP_URL=https://parentdoctorserver.onrender.com
 
 ### 1. Configure Email Service (Recommended)
 
-1. Choose an SMTP provider (Gmail, SendGrid, or Mailgun)
+1. Choose an SMTP provider (Outlook, Gmail, SendGrid, or Mailgun)
 2. Get your SMTP credentials
 3. In Render.com, go to **Environment** tab
 4. Add each SMTP variable:
    - Click **Add Environment Variable**
    - Enter variable name (e.g., `SMTP_HOST`)
-   - Enter variable value (e.g., `smtp.gmail.com`)
+   - Enter variable value (e.g., `smtp-mail.outlook.com` for Outlook)
    - Click **Save Changes**
 5. Repeat for all SMTP variables
+
+**For Outlook/Hotmail specifically:**
+```
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=Yaxindesign@outlook.com
+SMTP_PASS=yaxin1234567
+SMTP_FROM=ParentDoctor <Yaxindesign@outlook.com>
+```
 
 ### 2. Configure SMS Service (Optional)
 
@@ -201,7 +227,16 @@ After deployment, check the logs for:
 
 ## Quick Reference
 
-**Minimum required for email:**
+**Minimum required for email (Outlook example):**
+```
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=Yaxindesign@outlook.com
+SMTP_PASS=yaxin1234567
+```
+
+**Or Gmail example:**
 ```
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
