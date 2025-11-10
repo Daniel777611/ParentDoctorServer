@@ -122,6 +122,18 @@ This email is automatically sent by ParentDoctor system. Please do not reply.
     return true;
   } catch (error) {
     console.error(`❌ Email sending failed (${email}):`, error.message);
+    
+    // Provide detailed error information for troubleshooting
+    if (error.message.includes("Invalid login") || error.message.includes("BadCredentials")) {
+      console.error(`   🔍 Troubleshooting Gmail authentication:`);
+      console.error(`   1. Check if App Password is correct (16 characters, no spaces)`);
+      console.error(`   2. Verify SMTP_USER is correct: ${process.env.SMTP_USER || '(not set)'}`);
+      console.error(`   3. Verify SMTP_PASS length: ${process.env.SMTP_PASS ? process.env.SMTP_PASS.length + ' characters' : '(not set)'}`);
+      console.error(`   4. Make sure Two-Step Verification is enabled on Gmail account`);
+      console.error(`   5. Generate a new App Password if needed: https://myaccount.google.com/apppasswords`);
+      console.error(`   6. Ensure no extra spaces in SMTP_PASS environment variable`);
+    }
+    
     return false;
   }
 }
