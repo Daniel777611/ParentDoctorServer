@@ -214,6 +214,25 @@ wss.on("connection", (ws) => {
   });
 });
 
+
+// ✅ 启动时自动审查所有未审核医生（仅启动时执行一次）
+(async () => {
+  try {
+    const { rows } = await pool.query("SELECT * FROM doctor WHERE ai_review_status='pending'");
+    if (rows.length === 0) {
+      console.log("🤖 启动时检查：没有待审查的医生。");
+    } else {
+      for (const doctor of rows) {
+        await runAIReview(doctor);
+      }
+      console.log(`🤖 启动时已自动审查 ${rows.length} 位医生。`);
+    }
+  } catch (err) {
+    console.error("❌ 启动时自动审查失败:", err.message);
+  }
+})();
+
+
 server.listen(PORT, () => {
   console.log(`\n🚀 Server running on port ${PORT}\n`);
 });
