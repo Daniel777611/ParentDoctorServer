@@ -95,15 +95,31 @@ SMTP_PASS=your_sendgrid_api_key
 SMTP_FROM=ParentDoctor <noreply@yourdomain.com>
 ```
 
-#### Mailgun
+#### Mailgun (Recommended for Production)
 ```
 SMTP_HOST=smtp.mailgun.org
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=your_mailgun_username
-SMTP_PASS=your_mailgun_password
-SMTP_FROM=ParentDoctor <noreply@yourdomain.com>
+SMTP_USER=postmaster@your-domain.mailgun.org
+SMTP_PASS=your_mailgun_smtp_password
+SMTP_FROM=ParentDoctor <noreply@your-domain.mailgun.org>
 ```
+
+**Advantages:**
+- Free tier: 5,000 emails per month
+- Simple configuration
+- Uses API Key (no App Password needed)
+- Reliable delivery
+- Good for production use
+
+**Setup Steps:**
+1. Sign up at https://www.mailgun.com/
+2. Verify your email
+3. Go to **Sending** → **Domain Settings**
+4. Get your SMTP credentials (username and password)
+5. Use sandbox domain for testing, or verify your own domain for production
+
+**Note:** For detailed setup instructions, see `MAILGUN_SETUP.md`
 
 ### SMS Service (Twilio) - Optional
 
@@ -134,7 +150,7 @@ APP_URL=https://parentdoctorserver.onrender.com
 
 ### 1. Configure Email Service (Recommended)
 
-1. Choose an SMTP provider (Outlook, Gmail, SendGrid, or Mailgun)
+1. Choose an SMTP provider (Mailgun recommended, or Gmail, SendGrid, Outlook)
 2. Get your SMTP credentials
 3. In Render.com, go to **Environment** tab
 4. Add each SMTP variable:
@@ -258,13 +274,14 @@ After deployment, check the logs for:
 
 ## Quick Reference
 
-**Minimum required for email (Outlook example):**
+**Minimum required for email (Mailgun example - Recommended):**
 ```
-SMTP_HOST=smtp-mail.outlook.com
+SMTP_HOST=smtp.mailgun.org
 SMTP_PORT=587
 SMTP_SECURE=false
-SMTP_USER=Yaxindesign@outlook.com
-SMTP_PASS=yaxin1234567
+SMTP_USER=postmaster@your-domain.mailgun.org
+SMTP_PASS=your_mailgun_smtp_password
+SMTP_FROM=ParentDoctor <noreply@your-domain.mailgun.org>
 ```
 
 **Or Gmail example:**
@@ -273,6 +290,15 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password
+```
+
+**Or Outlook example:**
+```
+SMTP_HOST=smtp-mail.outlook.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@outlook.com
 SMTP_PASS=your_app_password
 ```
 
