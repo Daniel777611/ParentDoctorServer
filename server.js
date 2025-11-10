@@ -147,8 +147,9 @@ app.post(
         [doctor_id, first_name, last_name, nation, major || "", email || "", phone || "", idCardPath, licensePath]
       );
 
-      // ✅ 调用 AI 审查模块（异步执行）
-        runAIReview(result.rows[0]);
+      // ✅ 调用 AI 审查模块（同步等待执行）
+        await runAIReview(result.rows[0]);
+
 
 
       res.status(201).json({
