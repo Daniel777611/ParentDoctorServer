@@ -10,6 +10,8 @@ const { Pool } = require("pg");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { runAIReview } = require("./aiReview");
+
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() }); // ✅ 文件直接存内存（Render 无需本地写入）
@@ -144,6 +146,10 @@ app.post(
         RETURNING *`,
         [doctor_id, first_name, last_name, nation, major || "", email || "", phone || "", idCardPath, licensePath]
       );
+
+      // ✅ 调用 AI 审查模块（异步执行）
+        runAIReview(result.rows[0]);
+
 
       res.status(201).json({
         success: true,
