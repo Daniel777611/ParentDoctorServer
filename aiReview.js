@@ -47,18 +47,33 @@ async function runAIReview(doctor) {
 
     // ✅ Send review result notification (Email + SMS)
     try {
+      console.log(`📬 Attempting to send notifications for doctor ${doctor.doctor_id}`);
+      console.log(`   - Email: ${doctor.email || '(empty)'}`);
+      console.log(`   - Phone: ${doctor.phone || '(empty)'}`);
+      
       const notificationResult = await sendReviewNotification(doctor, status, notes);
+      
       if (notificationResult.emailSent) {
-        console.log(`📧 Email notification sent to ${doctor.email}`);
+        console.log(`✅ Email notification sent to ${doctor.email}`);
+      } else {
+        console.log(`⚠️  Email notification not sent (check email value and SMTP configuration)`);
       }
+      
       if (notificationResult.smsSent) {
-        console.log(`📱 SMS notification sent to ${doctor.phone}`);
+        console.log(`✅ SMS notification sent to ${doctor.phone}`);
+      } else {
+        console.log(`⚠️  SMS notification not sent (check phone value and Twilio configuration)`);
       }
+      
       if (!notificationResult.emailSent && !notificationResult.smsSent) {
-        console.log(`⚠️  No notifications sent (email or phone may be empty, or service not configured)`);
+        console.log(`⚠️  No notifications sent. Please check:`);
+        console.log(`   1. Email/Phone values in database`);
+        console.log(`   2. SMTP environment variables (SMTP_HOST, SMTP_USER, SMTP_PASS)`);
+        console.log(`   3. Twilio environment variables (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER)`);
       }
     } catch (notifyErr) {
       console.error("❌ Notification sending failed:", notifyErr.message);
+      console.error("   Stack trace:", notifyErr.stack);
       // Notification failure does not affect review process, only log error
     }
   } catch (err) {

@@ -39,8 +39,12 @@ if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.e
  * @returns {Promise<boolean>} Whether sending was successful
  */
 async function sendEmailNotification(email, firstName, lastName, status, notes) {
-  if (!mailTransporter || !email) {
-    console.log("⚠️  Email service not configured or email is empty, skipping email notification");
+  if (!mailTransporter) {
+    console.log("⚠️  Email service not configured (need SMTP_HOST, SMTP_USER, SMTP_PASS), skipping email notification");
+    return false;
+  }
+  if (!email || email.trim() === "") {
+    console.log("⚠️  Email is empty, skipping email notification");
     return false;
   }
 
@@ -131,8 +135,12 @@ This email is automatically sent by ParentDoctor system. Please do not reply.
  * @returns {Promise<boolean>} Whether sending was successful
  */
 async function sendSMSNotification(phone, firstName, lastName, status) {
-  if (!twilioClient || !phone) {
-    console.log("⚠️  SMS service not configured or phone is empty, skipping SMS notification");
+  if (!twilioClient) {
+    console.log("⚠️  SMS service not configured (need TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER), skipping SMS notification");
+    return false;
+  }
+  if (!phone || phone.trim() === "") {
+    console.log("⚠️  Phone is empty, skipping SMS notification");
     return false;
   }
 
