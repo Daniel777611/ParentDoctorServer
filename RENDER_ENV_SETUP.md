@@ -28,6 +28,53 @@ SMTP_FROM=ParentDoctor <noreply@parentdoctor.com>
 
 **Common SMTP Providers:**
 
+#### Gmail (Recommended - Free & Easy) ⭐
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_16_char_app_password  # Use App Password, not regular password
+SMTP_FROM=ParentDoctor <your_email@gmail.com>
+```
+
+**Advantages:**
+- ✅ **500 emails per day** (15,000 per month) - FREE
+- ✅ Completely free forever
+- ✅ Easy to set up
+- ✅ No credit card required
+- ✅ Very reliable
+
+**Setup Steps:**
+1. Create Gmail account: https://accounts.google.com/signup
+2. Enable 2-Step Verification: https://myaccount.google.com/security
+3. Generate App Password: https://myaccount.google.com/apppasswords
+4. Use the 16-character App Password in `SMTP_PASS`
+
+**Note:** For detailed free email setup instructions, see `FREE_EMAIL_SETUP.md`
+
+#### SendGrid (Free Professional Service)
+```
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=apikey
+SMTP_PASS=your_sendgrid_api_key
+SMTP_FROM=ParentDoctor <noreply@yourdomain.com>
+```
+
+**Advantages:**
+- ✅ **100 emails per day** (3,000 per month) - FREE
+- ✅ Professional email service
+- ✅ Free forever
+- ✅ No credit card required
+
+**Setup Steps:**
+1. Sign up at https://signup.sendgrid.com/
+2. Create API Key in dashboard
+3. Use API Key as `SMTP_PASS`
+4. Use `apikey` as `SMTP_USER`
+
 #### Outlook/Hotmail
 ```
 SMTP_HOST=smtp-mail.outlook.com
@@ -95,7 +142,7 @@ SMTP_PASS=your_sendgrid_api_key
 SMTP_FROM=ParentDoctor <noreply@yourdomain.com>
 ```
 
-#### Mailgun (Recommended for Production)
+#### Mailgun (Free Tier Available)
 ```
 SMTP_HOST=smtp.mailgun.org
 SMTP_PORT=587
@@ -106,11 +153,13 @@ SMTP_FROM=ParentDoctor <noreply@your-domain.mailgun.org>
 ```
 
 **Advantages:**
-- Free tier: 5,000 emails per month
+- Free tier: 5,000 emails per month (first 3 months), then 1,000/month
 - Simple configuration
 - Uses API Key (no App Password needed)
 - Reliable delivery
-- Good for production use
+- ⚠️ Requires credit card after 3 months (but still free tier)
+
+**Note:** For completely free options, Gmail (500/day) or SendGrid (100/day) are better choices.
 
 **Setup Steps:**
 1. Sign up at https://www.mailgun.com/
@@ -150,7 +199,11 @@ APP_URL=https://parentdoctorserver.onrender.com
 
 ### 1. Configure Email Service (Recommended)
 
-1. Choose an SMTP provider (Mailgun recommended, or Gmail, SendGrid, Outlook)
+1. Choose an SMTP provider:
+   - **Gmail** (Recommended - 500 emails/day, completely free, easy setup)
+   - **SendGrid** (100 emails/day, professional service, free forever)
+   - **Mailgun** (1,000/month after 3 months, requires credit card)
+   - **Outlook** (requires App Password, can be complex)
 2. Get your SMTP credentials
 3. In Render.com, go to **Environment** tab
 4. Add each SMTP variable:
@@ -274,7 +327,27 @@ After deployment, check the logs for:
 
 ## Quick Reference
 
-**Minimum required for email (Mailgun example - Recommended):**
+**Minimum required for email (Gmail example - Recommended & Free):**
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_16_char_app_password
+SMTP_FROM=ParentDoctor <your_email@gmail.com>
+```
+
+**Or SendGrid (Free Professional Service):**
+```
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=apikey
+SMTP_PASS=your_sendgrid_api_key
+SMTP_FROM=ParentDoctor <noreply@yourdomain.com>
+```
+
+**Or Mailgun (Free Tier):**
 ```
 SMTP_HOST=smtp.mailgun.org
 SMTP_PORT=587
