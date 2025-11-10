@@ -17,12 +17,13 @@ const upload = multer({ storage: multer.memoryStorage() }); // ✅ 文件直接�
 // ✅ Cloudflare R2 客户端
 const r2 = new S3Client({
   region: "auto",
-  endpoint: process.env.R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  },
-});
+  endpoint: process.env.R2_ENDPOINT,                   // 形如 https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   forcePathStyle: true,                                 // ★ R2 必需，避免 403 Unauthorized
+   credentials: {
+     accessKeyId: process.env.R2_ACCESS_KEY_ID,
+     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+   },
+ });
 const bucket = process.env.R2_BUCKET_NAME;
 
 // ✅ 基础设置
