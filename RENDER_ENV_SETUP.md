@@ -34,15 +34,41 @@ SMTP_HOST=smtp-mail.outlook.com
 SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=Yaxindesign@outlook.com
-SMTP_PASS=your_password
+SMTP_PASS=your_app_password  # ⚠️ MUST use App Password, not regular password
 SMTP_FROM=ParentDoctor <Yaxindesign@outlook.com>
 ```
+
+**⚠️ IMPORTANT: Outlook requires App Password!**
+
+Outlook has disabled basic authentication. You **MUST** use an App Password instead of your regular password.
+
+**Steps to generate Outlook App Password:**
+
+1. **Go to Microsoft Account Security:**
+   - Visit: https://account.microsoft.com/security
+   - Or: https://account.live.com/proofs/Manage
+
+2. **Enable Two-Step Verification (if not already enabled):**
+   - Go to **Security** → **Advanced security options**
+   - Enable **Two-step verification**
+
+3. **Generate App Password:**
+   - Go to **Security** → **Advanced security options**
+   - Scroll down to **App passwords**
+   - Click **Create a new app password**
+   - Select **Mail** and your device
+   - Click **Generate**
+   - **Copy the 16-character password** (you'll only see it once!)
+
+4. **Use the App Password in Render.com:**
+   - In Render.com, set `SMTP_PASS` to the generated App Password (not your regular password)
+   - The App Password will look like: `abcd-efgh-ijkl-mnop` (16 characters with dashes)
 
 **Note:** For Outlook/Hotmail:
 - Use `smtp-mail.outlook.com` as the SMTP host
 - Port 587 with STARTTLS (SMTP_SECURE=false)
 - Use your full email address as SMTP_USER
-- Use your regular Outlook password (or App Password if 2FA is enabled)
+- **MUST use App Password** (regular password will NOT work)
 
 #### Gmail
 ```
@@ -124,9 +150,11 @@ SMTP_HOST=smtp-mail.outlook.com
 SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=Yaxindesign@outlook.com
-SMTP_PASS=yaxin1234567
+SMTP_PASS=your_app_password  # ⚠️ Use App Password from Microsoft Account
 SMTP_FROM=ParentDoctor <Yaxindesign@outlook.com>
 ```
+
+**⚠️ Important:** You must generate an App Password from your Microsoft Account. Regular password will NOT work due to "basic authentication is disabled" error.
 
 ### 2. Configure SMS Service (Optional)
 
@@ -187,7 +215,10 @@ After deployment, check the logs for:
 - Check logs for specific error messages
 
 **Common Errors:**
-- `Invalid login`: Wrong SMTP_USER or SMTP_PASS
+- `Invalid login` / `Authentication unsuccessful, basic authentication is disabled`: 
+  - **For Outlook:** You MUST use App Password, not regular password
+  - **For Gmail:** You MUST use App Password, not regular password
+  - Generate App Password from your account security settings
 - `Connection timeout`: Wrong SMTP_HOST or SMTP_PORT
 - `Email is empty`: Doctor registration didn't include email
 
