@@ -355,19 +355,46 @@
     
     /* Right Panel */
     .panel-right {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: var(--report-section-height, 1fr) 4px var(--chat-section-height, 1fr);
       background: var(--card);
-      overflow-y: auto;
-      position: relative;
       overflow: hidden;
+      position: relative;
+    }
+    
+    /* Vertical Resizer Handle */
+    .resizer-vertical {
+      height: 4px;
+      background: var(--border);
+      cursor: row-resize;
+      position: relative;
+      z-index: 10;
+      transition: background 0.2s ease;
+      flex-shrink: 0;
+    }
+    .resizer-vertical:hover {
+      background: var(--accent);
+    }
+    .resizer-vertical.dragging {
+      background: var(--accent);
+    }
+    .resizer-vertical::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: -2px;
+      bottom: -2px;
+      cursor: row-resize;
     }
     
     /* AI Summary Report */
     .report-section {
       background: var(--card);
       padding: 20px;
-      border-bottom: 1px solid var(--border);
+      overflow-y: auto;
+      min-height: 200px;
+      position: relative;
     }
     .report-section h4 {
       font-size: 12px;
@@ -437,9 +464,9 @@
     .chat-section {
       background: var(--card);
       padding: 20px;
-      flex: 1;
       overflow-y: auto;
-      min-height: 300px;
+      min-height: 200px;
+      position: relative;
     }
     .chat-section h4 {
       font-size: 12px;
@@ -603,6 +630,9 @@
         </div>
       </div>
       
+      <!-- Vertical Resizer Handle -->
+      <div class="resizer-vertical" id="resizerVertical"></div>
+      
       <!-- AI-Patient Chat History -->
       <div class="chat-section">
         <h4>AI-Patient Chat History</h4>
@@ -699,6 +729,85 @@
       document.addEventListener('mousemove', resize);
       document.addEventListener('mouseup', stopResize);
       document.addEventListener('mouseleave', stopResize);
+    })();
+
+    // Resizable Vertical Panels (Right Panel)
+    (function() {
+      const resizerVertical = document.getElementById('resizerVertical');
+      const rightPanel = document.querySelector('.panel-right');
+      let isResizing = false;
+      let startY = 0;
+      let startReportHeight = 0;
+      let startChatHeight = 0;
+
+      // Load saved panel heights
+      const savedReportHeight = localStorage.getItem('reportSectionHeight');
+      const savedChatHeight = localStorage.getItem('chatSectionHeight');
+      if (savedReportHeight && savedChatHeight) {
+        document.documentElement.style.setProperty('--report-section-height', savedReportHeight);
+        document.documentElement.style.setProperty('--chat-section-height', savedChatHeight);
+      }
+
+      function startResizeVertical(e) {
+        isResizing = true;
+        resizerVertical.classList.add('dragging');
+        startY = e.clientY;
+        
+        // Get current heights
+        const rightPanelRect = rightPanel.getBoundingClientRect();
+        const reportSection = document.querySelector('.report-section');
+        const chatSection = document.querySelector('.chat-section');
+        const reportRect = reportSection.getBoundingClientRect();
+        const chatRect = chatSection.getBoundingClientRect();
+        
+        startReportHeight = reportRect.height;
+        startChatHeight = chatRect.height;
+        
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+      }
+
+      function resizeVertical(e) {
+        if (!isResizing) return;
+        
+        const rightPanelRect = rightPanel.getBoundingClientRect();
+        const deltaY = e.clientY - startY;
+        const panelHeight = rightPanelRect.height - 4; // Subtract resizer height
+        
+        // Calculate new heights
+        const newReportHeight = startReportHeight + deltaY;
+        const newChatHeight = startChatHeight - deltaY;
+        
+        // Set minimum heights (20% of panel)
+        const minHeight = panelHeight * 0.2;
+        const maxHeight = panelHeight * 0.8;
+        
+        if (newReportHeight >= minHeight && newReportHeight <= maxHeight) {
+          const reportPercent = (newReportHeight / panelHeight) * 100;
+          const chatPercent = (newChatHeight / panelHeight) * 100;
+          
+          document.documentElement.style.setProperty('--report-section-height', `${reportPercent}%`);
+          document.documentElement.style.setProperty('--chat-section-height', `${chatPercent}%`);
+          
+          // Save to localStorage
+          localStorage.setItem('reportSectionHeight', `${reportPercent}%`);
+          localStorage.setItem('chatSectionHeight', `${chatPercent}%`);
+        }
+      }
+
+      function stopResizeVertical() {
+        if (!isResizing) return;
+        isResizing = false;
+        resizerVertical.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+
+      resizerVertical.addEventListener('mousedown', startResizeVertical);
+      document.addEventListener('mousemove', resizeVertical);
+      document.addEventListener('mouseup', stopResizeVertical);
+      document.addEventListener('mouseleave', stopResizeVertical);
     })();
 
     // Load doctor data
