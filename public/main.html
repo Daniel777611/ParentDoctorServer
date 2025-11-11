@@ -263,9 +263,16 @@
       color: var(--text);
       margin: 0;
     }
+    .ai-section > div {
+      min-height: 20px;
+    }
     .ai-section ul {
       margin: 0;
       padding-left: 20px;
+      list-style: none;
+    }
+    .ai-section ul:empty {
+      padding: 0;
     }
     .ai-section li {
       font-size: 14px;
@@ -338,6 +345,9 @@
       letter-spacing: 0.5px;
       margin-bottom: 16px;
     }
+    .report-section #summaryReport {
+      min-height: 20px;
+    }
     .report-section p {
       font-size: 14px;
       line-height: 1.6;
@@ -347,13 +357,33 @@
     .report-section p:last-child {
       margin-bottom: 0;
     }
+    .report-section p:has(span:empty) {
+      display: none;
+    }
+    .report-section p:has(+ ul:empty) {
+      display: none;
+    }
+    .report-section p:empty:not(.report-note) {
+      display: none;
+    }
     .report-section strong {
       font-weight: 600;
       color: var(--text);
     }
+    .report-section span:empty {
+      display: none;
+    }
     .report-section ul {
       margin: 8px 0 12px 20px;
       padding: 0;
+      list-style: none;
+    }
+    .report-section ul:empty {
+      margin: 0;
+      display: none;
+    }
+    .report-section ul:empty + p {
+      display: none;
     }
     .report-section li {
       font-size: 14px;
@@ -365,6 +395,10 @@
       color: var(--muted);
       margin-top: 16px;
       font-style: italic;
+      display: none;
+    }
+    .report-section:has(#reportSummary:not(:empty)) .report-note {
+      display: block;
     }
     
     /* Chat History */
@@ -496,13 +530,11 @@
       <div class="ai-sections">
         <div class="ai-section">
           <h4>AI Real-time Interpreter</h4>
-          <p id="interpreterText">Waiting for patient input...</p>
+          <div id="interpreterText"></div>
         </div>
         <div class="ai-section">
           <h4>AI Symptom Summary</h4>
-          <ul id="symptomList">
-            <li>No symptoms reported yet</li>
-          </ul>
+          <ul id="symptomList"></ul>
         </div>
       </div>
     </div>
@@ -520,15 +552,13 @@
       <div class="report-section">
         <h4>AI Summary Report</h4>
         <div id="summaryReport">
-          <p><strong>Patient:</strong> <span id="reportPatient">-</span></p>
+          <p><strong>Patient:</strong> <span id="reportPatient"></span></p>
           <p><strong>Reported Symptoms:</strong></p>
-          <ul id="reportSymptoms">
-            <li>No symptoms yet</li>
-          </ul>
+          <ul id="reportSymptoms"></ul>
           <p><strong>Parent's Concern:</strong></p>
-          <p id="reportConcern">-</p>
+          <p id="reportConcern"></p>
           <p><strong>AI Summary:</strong></p>
-          <p id="reportSummary">-</p>
+          <p id="reportSummary"></p>
           <p class="report-note">(Auto-generated from AI-Patient conversation)</p>
         </div>
       </div>
@@ -801,12 +831,12 @@
     }
 
     function resetToWaitingState() {
-      document.getElementById('interpreterText').textContent = 'Waiting for patient input...';
-      document.getElementById('symptomList').innerHTML = '<li>No symptoms reported yet</li>';
-      document.getElementById('reportPatient').textContent = '-';
-      document.getElementById('reportSymptoms').innerHTML = '<li>No symptoms yet</li>';
-      document.getElementById('reportConcern').textContent = '-';
-      document.getElementById('reportSummary').textContent = '-';
+      document.getElementById('interpreterText').textContent = '';
+      document.getElementById('symptomList').innerHTML = '';
+      document.getElementById('reportPatient').textContent = '';
+      document.getElementById('reportSymptoms').innerHTML = '';
+      document.getElementById('reportConcern').textContent = '';
+      document.getElementById('reportSummary').textContent = '';
       document.getElementById('chatHistory').innerHTML = '';
     }
 
