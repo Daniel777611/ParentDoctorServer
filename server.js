@@ -180,6 +180,88 @@ app.post("/api/verify/check-code", async (req, res) => {
   }
 });
 
+// ✅ Send Login Verification Code
+app.post("/api/login/send-code", async (req, res) => {
+  try {
+    const email = (req.body?.email || "").trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    // Check if email is registered (opposite of registration)
+    const { rows } = await pool.query("SELECT email FROM doctor WHERE lower(email) = $1 LIMIT 1", [email]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "This email is not registered." });
+    }
+
+    // Generate 6-digit code
+    const code = generateVerificationCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    // Store code with login flag
+    verificationCodes.set(`login_${email}`, { code, expiresAt, type: "login" });
+
+    // Send email
+    const sent = await sendVerificationCode(email, code);
+    if (!sent) {
+      return res.status(500).json({ success: false, message: "Failed to send verification code. Please try again." });
+    }
+
+    res.json({ success: true, message: "Verification code sent to your email." });
+  } catch (err) {
+    console.error("❌ Error sending login verification code:", err.message);
+    res.status(500).json({ success: false, error: "Failed to send verification code." });
+  }
+});
+
+// ✅ Verify Login Code and Get Doctor Info
+app.post("/api/login/verify-code", async (req, res) => {
+  try {
+    const email = (req.body?.email || "").trim().toLowerCase();
+    const code = (req.body?.code || "").trim();
+
+    if (!email || !code) {
+      return res.status(400).json({ success: false, message: "Email and code are required." });
+    }
+
+    const stored = verificationCodes.get(`login_${email}`);
+    if (!stored) {
+      return res.status(400).json({ success: false, message: "Verification code not found or expired. Please request a new code." });
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      verificationCodes.delete(`login_${email}`);
+      return res.status(400).json({ success: false, message: "Verification code has expired. Please request a new code." });
+    }
+
+    if (stored.code !== code) {
+      return res.status(400).json({ success: false, message: "Invalid verification code. Please try again." });
+    }
+
+    // Code is valid, get doctor info
+    const { rows } = await pool.query(
+      `SELECT doctor_id, first_name, last_name, email, ai_review_status, ai_review_notes, verified, created_at
+       FROM doctor
+       WHERE lower(email) = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Doctor not found." });
+    }
+
+    // Clear verification code after successful login
+    verificationCodes.delete(`login_${email}`);
+
+    res.json({ success: true, doctor: rows[0], message: "Login successful." });
+  } catch (err) {
+    console.error("❌ Error verifying login code:", err.message);
+    res.status(500).json({ success: false, error: "Failed to verify code." });
+  }
+});
+
 // ✅ Upload File to Cloudflare R2
 async function uploadToR2(file, doctorId, category) {
   if (!file) return null;

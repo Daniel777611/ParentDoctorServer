@@ -1,321 +1,373 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Doctor Sign In | ParentDoctor</title>
   <style>
-    :root{
-      --bg:#f5f5f5;
-      --card:#fff;
-      --border:#dcdcdc;
-      --text:#222;
-      --muted:#666;
-      --accent:#222;
-      --accent-hover:#000;
+    :root {
+      --bg: #f5f5f5;
+      --card: #fff;
+      --border: #dcdcdc;
+      --text: #222;
+      --muted: #666;
+      --accent: #222;
+      --accent-hover: #000;
     }
-    *{box-sizing:border-box;}
-    body{
-      margin:0;
-      min-height:100vh;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:var(--bg);
-      font-family:"Inter","Segoe UI",sans-serif;
-      color:var(--text);
-      padding:24px;
+    * {
+      box-sizing: border-box;
     }
-    .card{
-      width:min(360px,92vw);
-      background:var(--card);
-      border-radius:24px;
-      padding:50px 42px;
-      box-shadow:0 12px 24px -18px rgba(0,0,0,0.35);
+    body {
+      font-family: "Inter", "Segoe UI", sans-serif;
+      background: var(--bg);
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
     }
-    h1{
-      margin:0 0 28px;
-      text-align:center;
-      font-size:24px;
-      font-weight:600;
+    .card {
+      width: min(360px, 90vw);
+      background: var(--card);
+      border-radius: 24px;
+      padding: 48px 40px;
+      box-shadow: 0 12px 24px -18px rgba(0, 0, 0, 0.35);
+      display: none;
     }
-    label{
-      display:block;
-      font-size:14px;
-      margin-bottom:6px;
-      color:var(--text);
-      font-weight:500;
+    .card.active {
+      display: block;
     }
-    input[type="email"]{
-      width:100%;
-      padding:12px 14px;
-      border:1px solid var(--border);
-      border-radius:10px;
-      font-size:14px;
-      outline:none;
-      transition:border 0.2s ease;
+    h1 {
+      margin: 0 0 32px;
+      text-align: center;
+      font-size: 24px;
+      color: var(--text);
+      font-weight: 600;
     }
-    input[type="email"]:focus{
-      border-color:#999;
+    p.caption {
+      margin-top: -20px;
+      margin-bottom: 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
     }
-    .btn{
-      width:100%;
-      border-radius:10px;
-      border:1px solid transparent;
-      padding:13px 0;
-      font-size:15px;
-      font-weight:600;
-      cursor:pointer;
-      transition:background 0.2s ease, border-color 0.2s ease;
+    label {
+      display: block;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 6px;
+      font-weight: 500;
     }
-    .btn.primary{
-      background:var(--accent);
-      color:#fff;
-      margin-top:22px;
+    input[type="text"],
+    input[type="email"] {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s ease;
     }
-    .btn.primary:hover{
-      background:var(--accent-hover);
+    input[type="text"]:focus,
+    input[type="email"]:focus {
+      border-color: #888;
     }
-    .btn.secondary{
-      background:#fff;
-      border:1px solid var(--border);
-      color:var(--text);
-      margin-top:10px;
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 0;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
     }
-    .btn.secondary:hover{
-      background:#f3f3f3;
+    .btn.primary {
+      background: var(--accent);
+      color: #fff;
+      margin-top: 28px;
     }
-    .divider{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      font-size:12px;
-      color:var(--muted);
-      margin:24px 0 18px;
+    .btn.primary:hover {
+      background: var(--accent-hover);
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 28px 0 18px;
     }
     .divider::before,
-    .divider::after{
-      content:"";
-      flex:1;
-      height:1px;
-      background:var(--border);
+    .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
     }
-    .quick-actions button{
-      width:100%;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      padding:12px;
-      border-radius:10px;
-      border:1px solid var(--border);
-      background:#fff;
-      font-size:14px;
-      cursor:pointer;
-      margin-bottom:10px;
-      transition:background 0.2s ease;
+    .quick-actions button {
+      width: 100%;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--text);
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: background 0.2s ease;
     }
-    .quick-actions button:hover{
-      background:#f8f8f8;
+    .quick-actions button:hover {
+      background: #f8f8f8;
     }
-    .note{
-      font-size:13px;
-      color:var(--muted);
-      text-align:center;
-      margin-top:12px;
+    .note {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 16px;
     }
-    .result{
-      margin-top:26px;
-      border:1px solid #e5e5e5;
-      border-radius:16px;
-      padding:20px 18px;
-      display:none;
+    .resend-link {
+      display: block;
+      text-align: center;
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--text);
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
     }
-    .result.active{
-      display:block;
+    .resend-link:hover {
+      color: var(--accent);
     }
-    .status-pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      border-radius:999px;
-      padding:8px 14px;
-      font-size:13px;
-      font-weight:600;
-      margin-bottom:14px;
-      background:#f4f4f4;
-      color:var(--text);
+    .msg {
+      margin-top: 18px;
+      text-align: center;
+      font-size: 14px;
     }
-    .result p{
-      margin:0 0 8px;
-      color:var(--muted);
-      font-size:14px;
-      line-height:1.5;
+    .link {
+      display: block;
+      margin-top: 18px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
     }
-    .error{
-      margin-top:18px;
-      text-align:center;
-      color:#ef4444;
-      font-size:14px;
-    }
-    .link{
-      display:block;
-      margin-top:18px;
-      text-align:center;
-      font-size:13px;
-      color:var(--muted);
-      text-decoration:none;
-    }
-    .link:hover{
-      color:var(--accent);
+    .link:hover {
+      color: var(--accent);
     }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div id="stepEmail" class="card active">
     <h1>Doctor</h1>
-    <form id="signinForm">
-      <label for="signinEmail">Enter your Email</label>
-      <input type="email" id="signinEmail" required placeholder="name@example.com" autocomplete="email"/>
-      <button class="btn primary" id="checkBtn" type="submit">Continue</button>
+    <form id="emailForm">
+      <label for="email">Enter your Email</label>
+      <input type="email" id="email" required placeholder="name@example.com" autocomplete="email" />
+      <button id="sendCodeBtn" class="btn primary" type="submit">Continue</button>
 
       <div class="divider">OR</div>
       <div class="quick-actions">
-        <button type="button"> Continue with Apple</button>
-        <button type="button">🟢 Continue with Google</button>
-        <button type="button">📞 Continue with Phone</button>
+        <button type="button" data-provider="apple">Continue with Apple</button>
+        <button type="button" data-provider="google">🟢 Continue with Google</button>
+        <button type="button" data-provider="phone">📞 Continue with Phone</button>
       </div>
     </form>
     <p class="note">Third-party sign in coming soon.</p>
+    <div class="msg" id="emailMsg"></div>
+  </div>
 
-    <div id="resultBox" class="result">
-      <div id="statusPill" class="status-pill"></div>
-      <p id="statusMessage"></p>
-      <p id="notesMessage"></p>
+  <div id="stepVerify" class="card">
+    <p class="caption">Enter the Verification code we just sent to <strong id="verifyEmail"></strong></p>
+    <form id="verifyForm">
+      <input type="text" id="code" required placeholder="" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:20px;letter-spacing:4px;font-family:monospace;" />
+      <button id="verifyBtn" class="btn primary" type="submit">Continue</button>
+      <a href="#" id="resendBtn" class="resend-link">Resent</a>
+    </form>
+
+    <div class="divider">OR</div>
+    <div class="quick-actions">
+      <button type="button" data-provider="apple">Continue with Apple</button>
+      <button type="button" data-provider="google">🟢 Continue with Google</button>
+      <button type="button" data-provider="phone">📞 Continue with Phone</button>
     </div>
-
-    <div id="errorMessage" class="error"></div>
-    <a class="link" href="/register.html">Need to register instead?</a>
+    <p class="note">Third-party sign in coming soon.</p>
+    <div class="msg" id="verifyMsg"></div>
   </div>
 
   <script>
-    const signinForm = document.getElementById("signinForm");
-    const emailInput = document.getElementById("signinEmail");
-    const checkBtn = document.getElementById("checkBtn");
-    const resultBox = document.getElementById("resultBox");
-    const statusPill = document.getElementById("statusPill");
-    const statusMessage = document.getElementById("statusMessage");
-    const notesMessage = document.getElementById("notesMessage");
-    const errorMessage = document.getElementById("errorMessage");
+    const stepEmail = document.getElementById("stepEmail");
+    const stepVerify = document.getElementById("stepVerify");
+    const emailForm = document.getElementById("emailForm");
+    const verifyForm = document.getElementById("verifyForm");
+    const emailInput = document.getElementById("email");
+    const codeInput = document.getElementById("code");
+    const sendCodeBtn = document.getElementById("sendCodeBtn");
+    const verifyBtn = document.getElementById("verifyBtn");
+    const resendBtn = document.getElementById("resendBtn");
+    const verifyEmailLabel = document.getElementById("verifyEmail");
+    const emailMsg = document.getElementById("emailMsg");
+    const verifyMsg = document.getElementById("verifyMsg");
+    let capturedEmail = "";
 
+    // Third-party buttons
     document.querySelectorAll(".quick-actions button").forEach((btn) => {
       btn.addEventListener("click", () => alert("Coming soon"));
     });
 
-    signinForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email = emailInput.value.trim();
-      if (!validateEmail(email)) {
-        emailInput.focus();
-        emailInput.setCustomValidity("Please enter a valid email address");
-        emailInput.reportValidity();
-        return;
-      }
-
-      setLoading(true);
-      errorMessage.textContent = "";
-      resultBox.classList.remove("active");
-
-      try {
-        const res = await fetch("/api/doctors/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email })
-        });
-
-        if (res.status === 404) {
-          errorMessage.textContent = "We couldn't find a registration with that email.";
-          return;
-        }
-
-        if (!res.ok) {
-          throw new Error("Server error");
-        }
-
-        const data = await res.json();
-        const doctor = data.doctor;
-        const status = (doctor.ai_review_status || "pending").toLowerCase();
-
-        // Only allow approved doctors to login
-        if (status === "approved") {
-          // Store doctor info in sessionStorage
-          sessionStorage.setItem("doctorLoggedIn", "true");
-          sessionStorage.setItem("doctorData", JSON.stringify(doctor));
-          // Redirect to main interface
-          window.location.href = "/main.html";
-        } else {
-          // Show status for non-approved doctors
-          paintStatus(doctor);
-        }
-      } catch (err) {
-        errorMessage.textContent = "Something went wrong. Please try again.";
-      } finally {
-        setLoading(false);
-      }
-    });
-
-    function paintStatus(doctor) {
-      const statusMap = {
-        approved: {
-          badge: "Approved",
-          color: "#16a34a",
-          message: "Your registration has been approved. Welcome aboard!",
-        },
-        rejected: {
-          badge: "Not Approved",
-          color: "#ef4444",
-          message: "We're sorry, your registration was not approved.",
-        },
-        pending: {
-          badge: "Pending Review",
-          color: "#f59e0b",
-          message: "Your registration is under review. We will notify you soon.",
-        },
-      };
-
-      const status = (doctor.ai_review_status || "pending").toLowerCase();
-      const config = statusMap[status] || statusMap.pending;
-
-      statusPill.textContent = config.badge;
-      statusPill.style.background = hexToTint(config.color);
-      statusPill.style.color = config.color;
-
-      statusMessage.textContent = config.message;
-      const notes = (doctor.ai_review_notes || "").trim();
-      notesMessage.textContent = notes ? `Notes: ${notes}` : "";
-
-      resultBox.classList.add("active");
-    }
-
-    function setLoading(isLoading) {
-      checkBtn.disabled = isLoading;
-      checkBtn.textContent = isLoading ? "Checking..." : "Continue";
+    function setLoading(btn, isLoading) {
+      btn.disabled = isLoading;
+      btn.textContent = isLoading ? "Loading..." : (btn === sendCodeBtn ? "Continue" : "Continue");
     }
 
     function validateEmail(email) {
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     }
 
-    function hexToTint(hex) {
-      // lighten color for pill background
-      const clean = hex.replace("#", "");
-      const num = parseInt(clean, 16);
-      const r = Math.min(255, (num >> 16) + 180);
-      const g = Math.min(255, ((num >> 8) & 0xff) + 180);
-      const b = Math.min(255, (num & 0xff) + 180);
-      return `rgba(${r}, ${g}, ${b}, 0.35)`;
-    }
+    // Step 1: Send verification code
+    emailForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const value = emailInput.value.trim();
+      if (!validateEmail(value)) {
+        emailInput.focus();
+        emailInput.setCustomValidity("Please enter a valid email address");
+        emailInput.reportValidity();
+        return;
+      }
+
+      setLoading(sendCodeBtn, true);
+      emailMsg.textContent = "";
+      emailMsg.style.color = "#555";
+
+      try {
+        const res = await fetch("/api/login/send-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: value }),
+        });
+
+        const result = await res.json();
+        if (result.success) {
+          capturedEmail = value;
+          verifyEmailLabel.textContent = value;
+          emailMsg.style.color = "green";
+          emailMsg.textContent = "✅ Verification code sent! Check your email.";
+          stepEmail.classList.remove("active");
+          stepVerify.classList.add("active");
+          setTimeout(() => codeInput.focus(), 100);
+        } else {
+          emailMsg.style.color = "red";
+          emailMsg.textContent = "❌ " + (result.message || "Failed to send code.");
+        }
+      } catch (err) {
+        emailMsg.style.color = "red";
+        emailMsg.textContent = "❌ Network error. Please try again.";
+      } finally {
+        setLoading(sendCodeBtn, false);
+      }
+    });
+
+    // Step 2: Verify code and login
+    verifyForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const code = codeInput.value.trim();
+      if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+        codeInput.focus();
+        codeInput.setCustomValidity("Please enter a 6-digit code");
+        codeInput.reportValidity();
+        return;
+      }
+
+      setLoading(verifyBtn, true);
+      verifyMsg.textContent = "";
+
+      try {
+        const res = await fetch("/api/login/verify-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: capturedEmail, code }),
+        });
+
+        const result = await res.json();
+        if (result.success && result.doctor) {
+          const doctor = result.doctor;
+          const status = (doctor.ai_review_status || "pending").toLowerCase();
+
+          // Only allow approved doctors to login
+          if (status === "approved") {
+            // Store doctor info in sessionStorage
+            sessionStorage.setItem("doctorLoggedIn", "true");
+            sessionStorage.setItem("doctorData", JSON.stringify(doctor));
+            // Redirect to main interface
+            window.location.href = "/main.html";
+          } else {
+            // Show status for non-approved doctors
+            verifyMsg.style.color = "#f59e0b";
+            let message = "";
+            if (status === "pending") {
+              message = "Your registration is under review. We will notify you soon.";
+            } else if (status === "rejected") {
+              message = "We're sorry, your registration was not approved.";
+              if (doctor.ai_review_notes) {
+                message += ` Notes: ${doctor.ai_review_notes}`;
+              }
+            }
+            verifyMsg.textContent = message;
+          }
+        } else {
+          verifyMsg.style.color = "red";
+          verifyMsg.textContent = "❌ " + (result.message || "Invalid code.");
+          codeInput.value = "";
+          codeInput.focus();
+        }
+      } catch (err) {
+        verifyMsg.style.color = "red";
+        verifyMsg.textContent = "❌ Network error. Please try again.";
+      } finally {
+        setLoading(verifyBtn, false);
+      }
+    });
+
+    // Resend code link
+    resendBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      setLoading(resendBtn, true);
+      verifyMsg.textContent = "";
+
+      fetch("/api/login/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: capturedEmail }),
+      })
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.success) {
+            verifyMsg.style.color = "green";
+            verifyMsg.textContent = "✅ New code sent! Check your email.";
+          } else {
+            verifyMsg.style.color = "red";
+            verifyMsg.textContent = "❌ " + (result.message || "Failed to resend.");
+          }
+        })
+        .catch((err) => {
+          verifyMsg.style.color = "red";
+          verifyMsg.textContent = "❌ Network error. Please try again.";
+        })
+        .finally(() => {
+          setLoading(resendBtn, false);
+        });
+    });
   </script>
 </body>
 </html>
-
