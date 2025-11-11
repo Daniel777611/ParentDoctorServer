@@ -42,7 +42,7 @@
     /* Left Panel */
     .panel-left {
       display: grid;
-      grid-template-rows: auto var(--video-area-height, 1fr) 4px var(--ai-sections-height, auto);
+      grid-template-rows: auto var(--video-area-height, 1fr) 4px var(--ai-sections-height, 1fr);
       background: var(--card);
       border-right: 1px solid var(--border);
       position: relative;
@@ -945,8 +945,13 @@
       const savedVideoHeight = localStorage.getItem('videoAreaHeight');
       const savedAiHeight = localStorage.getItem('aiSectionsHeight');
       if (savedVideoHeight && savedAiHeight) {
-        document.documentElement.style.setProperty('--video-area-height', savedVideoHeight);
-        document.documentElement.style.setProperty('--ai-sections-height', savedAiHeight);
+        // Validate saved values
+        const videoPercent = parseFloat(savedVideoHeight);
+        const aiPercent = parseFloat(savedAiHeight);
+        if (!isNaN(videoPercent) && !isNaN(aiPercent) && videoPercent > 0 && aiPercent > 0) {
+          document.documentElement.style.setProperty('--video-area-height', savedVideoHeight);
+          document.documentElement.style.setProperty('--ai-sections-height', savedAiHeight);
+        }
       }
 
       function startResizeLeftVertical(e) {
