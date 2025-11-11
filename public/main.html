@@ -349,6 +349,14 @@
     .state-waiting .video-call-area {
       flex: 0 0 auto;
     }
+    /* Hide center controls in waiting state */
+    .state-waiting .panel-center {
+      display: none;
+    }
+    /* Adjust grid layout when waiting */
+    .state-waiting .container {
+      grid-template-columns: 1fr 1fr;
+    }
   </style>
 </head>
 <body>
