@@ -55,13 +55,11 @@
       align-items: center;
       justify-content: center;
       background: #f9f9f9;
-      position: relative;
-    }
-    .video-call-area.waiting {
-      min-height: 400px;
+      min-height: 300px;
     }
     .video-call-area.connected {
       background: #fff;
+      min-height: auto;
     }
     .waiting-text {
       color: var(--muted);
@@ -342,20 +340,14 @@
     
     /* State Management */
     .state-waiting .doctor-header,
-    .state-waiting .patient-image-container,
-    .state-waiting .ai-sections {
+    .state-waiting .patient-image-container {
       display: none;
     }
     .state-connected .waiting-text {
       display: none;
     }
-    .state-waiting .ai-sections {
-      display: grid;
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 12px 20px 20px;
+    .state-waiting .video-call-area {
+      flex: 0 0 auto;
     }
   </style>
 </head>
