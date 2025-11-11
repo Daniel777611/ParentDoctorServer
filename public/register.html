@@ -308,6 +308,15 @@
         <div id="license_preview" class="preview-minimal"></div>
       </div>
 
+      <div class="upload-group">
+        <label>Upload Profile Photo</label>
+        <label class="upload-trigger">
+          <input type="file" id="avatar_upload" name="avatar" accept="image/*" hidden />
+          <span>＋</span>
+        </label>
+        <div id="avatar_preview" class="preview-minimal"></div>
+      </div>
+
       <input type="hidden" id="email_hidden" name="email" />
       <button class="btn primary" type="submit">Submit</button>
     </form>
@@ -494,6 +503,7 @@
       formData.append("phone", document.getElementById("phone").value.trim());
       formData.append("id_card", document.getElementById("id_upload").files[0] || "");
       formData.append("medical_license", document.getElementById("license_upload").files[0] || "");
+      formData.append("avatar", document.getElementById("avatar_upload").files[0] || "");
 
       try {
         const res = await fetch("/api/doctors", {
@@ -540,6 +550,17 @@
     });
     document.getElementById("license_upload").addEventListener("change", (e) => {
       showPreview(e.target, "license_preview");
+    });
+    document.getElementById("avatar_upload").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+          alert("Avatar file size should be less than 5MB");
+          e.target.value = "";
+          return;
+        }
+        showPreview(e.target, "avatar_preview");
+      }
     });
 
     function showPreview(input, previewId) {

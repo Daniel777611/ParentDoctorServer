@@ -77,6 +77,7 @@ const pool = new Pool({
         phone VARCHAR(50),
         id_card TEXT,
         medical_license TEXT,
+        avatar TEXT,
         ai_review_status VARCHAR(50) DEFAULT 'pending',
         ai_confidence FLOAT DEFAULT 0.0,
         ai_review_notes TEXT DEFAULT '',
@@ -84,6 +85,11 @@ const pool = new Pool({
         verified BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+    // Add avatar column if table already exists
+    await client.query(`
+      ALTER TABLE doctor 
+      ADD COLUMN IF NOT EXISTS avatar TEXT;
     `);
     client.release();
   } catch (err) {
@@ -240,7 +246,7 @@ app.post("/api/login/verify-code", async (req, res) => {
 
     // Code is valid, get doctor info
     const { rows } = await pool.query(
-      `SELECT doctor_id, first_name, last_name, email, ai_review_status, ai_review_notes, verified, created_at
+      `SELECT doctor_id, first_name, last_name, email, avatar, ai_review_status, ai_review_notes, verified, created_at
        FROM doctor
        WHERE lower(email) = $1
        ORDER BY created_at DESC
@@ -315,6 +321,7 @@ app.post(
   upload.fields([
     { name: "id_card", maxCount: 1 },
     { name: "medical_license", maxCount: 1 },
+    { name: "avatar", maxCount: 1 },
   ]),
   async (req, res) => {
     try {
@@ -343,15 +350,16 @@ app.post(
       // Upload files
       const idCardPath = await uploadToR2(req.files["id_card"]?.[0], doctor_id, "id");
       const licensePath = await uploadToR2(req.files["medical_license"]?.[0], doctor_id, "license");
+      const avatarPath = await uploadToR2(req.files["avatar"]?.[0], doctor_id, "avatar");
 
       // Insert into database
       const result = await pool.query(
         `INSERT INTO doctor (
-          doctor_id, first_name, last_name, nation, major, email, phone, id_card, medical_license,
+          doctor_id, first_name, last_name, nation, major, email, phone, id_card, medical_license, avatar,
           ai_review_status, ai_confidence, ai_review_notes, reviewed_by, verified
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',0.0,'','system',false)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',0.0,'','system',false)
         RETURNING *`,
-        [doctor_id, first_name, last_name, nation, major || "", email || "", phone || "", idCardPath, licensePath]
+        [doctor_id, first_name, last_name, nation, major || "", email || "", phone || "", idCardPath, licensePath, avatarPath]
       );
 
       // ✅ Call AI Review Module (synchronous execution)
@@ -397,7 +405,7 @@ app.delete("/api/admin/doctors/:doctorId", async (req, res) => {
 
     // Get doctor data to extract file URLs
     const { rows } = await pool.query(
-      "SELECT id_card, medical_license FROM doctor WHERE doctor_id = $1",
+      "SELECT id_card, medical_license, avatar FROM doctor WHERE doctor_id = $1",
       [doctorId]
     );
 
@@ -409,6 +417,10 @@ app.delete("/api/admin/doctors/:doctorId", async (req, res) => {
     let deletedFiles = 0;
 
     // Delete files from R2
+    if (doctor.avatar) {
+      const deleted = await deleteFromR2(doctor.avatar);
+      if (deleted) deletedFiles++;
+    }
     if (doctor.id_card) {
       const deleted = await deleteFromR2(doctor.id_card);
       if (deleted) deletedFiles++;
@@ -433,15 +445,71 @@ app.delete("/api/admin/doctors/:doctorId", async (req, res) => {
   }
 });
 
+// ✅ Update Doctor Avatar
+app.post(
+  "/api/doctors/avatar",
+  upload.single("avatar"),
+  async (req, res) => {
+    try {
+      // Get doctor_id from session or request body
+      const doctorId = req.body?.doctor_id;
+      if (!doctorId) {
+        return res.status(400).json({ success: false, message: "Doctor ID is required." });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "Avatar file is required." });
+      }
+
+      // Check if doctor exists
+      const { rows: existing } = await pool.query(
+        "SELECT avatar FROM doctor WHERE doctor_id = $1",
+        [doctorId]
+      );
+
+      if (existing.length === 0) {
+        return res.status(404).json({ success: false, message: "Doctor not found." });
+      }
+
+      // Delete old avatar if exists
+      if (existing[0].avatar) {
+        await deleteFromR2(existing[0].avatar);
+      }
+
+      // Upload new avatar
+      const avatarPath = await uploadToR2(req.file, doctorId, "avatar");
+
+      // Update database
+      const result = await pool.query(
+        "UPDATE doctor SET avatar = $1 WHERE doctor_id = $2 RETURNING *",
+        [avatarPath, doctorId]
+      );
+
+      res.json({
+        success: true,
+        message: "Avatar updated successfully.",
+        doctor: result.rows[0],
+      });
+    } catch (err) {
+      console.error("❌ Error updating avatar:", err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+);
+
 // ✅ Clear All Data (for testing/reset)
 app.delete("/api/admin/clear-all", async (req, res) => {
   try {
     // First, get all doctors to extract file URLs
-    const { rows: doctors } = await pool.query("SELECT id_card, medical_license FROM doctor WHERE id_card IS NOT NULL OR medical_license IS NOT NULL");
+    const { rows: doctors } = await pool.query("SELECT id_card, medical_license, avatar FROM doctor WHERE id_card IS NOT NULL OR medical_license IS NOT NULL OR avatar IS NOT NULL");
 
     // Delete files from R2
     let deletedFiles = 0;
     for (const doctor of doctors) {
+      if (doctor.avatar) {
+        const deleted = await deleteFromR2(doctor.avatar);
+        if (deleted) deletedFiles++;
+      }
       if (doctor.id_card) {
         const deleted = await deleteFromR2(doctor.id_card);
         if (deleted) deletedFiles++;
@@ -485,7 +553,7 @@ app.post("/api/doctors/login", async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `SELECT doctor_id, first_name, last_name, email, ai_review_status, ai_review_notes, verified, created_at
+      `SELECT doctor_id, first_name, last_name, email, avatar, ai_review_status, ai_review_notes, verified, created_at
        FROM doctor
        WHERE lower(email) = $1
        ORDER BY created_at DESC
