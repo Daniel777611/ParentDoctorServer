@@ -42,7 +42,7 @@
     /* Left Panel */
     .panel-left {
       display: grid;
-      grid-template-rows: auto var(--video-area-height, 1fr) 4px var(--ai-sections-height, auto);
+      grid-template-rows: auto var(--video-area-height, 1fr) auto 4px var(--ai-sections-height, auto);
       background: var(--card);
       border-right: 1px solid var(--border);
       position: relative;
@@ -550,8 +550,7 @@
     
     /* State Management */
     .state-waiting .doctor-header,
-    .state-waiting .patient-image-container,
-    .state-waiting .audio-controls {
+    .state-waiting .patient-image-container {
       display: none;
     }
     .state-waiting .waiting-avatar-section {
@@ -631,12 +630,13 @@
                id="patientImage">
         </div>
         
-        <!-- Audio Controls Bar -->
-        <div class="audio-controls">
-          <span class="audio-icon">👂</span>
-          <button class="language-btn" id="languageBtn">English</button>
-          <span class="speaker-icon">🔊</span>
-        </div>
+      </div>
+      
+      <!-- Audio Controls Bar -->
+      <div class="audio-controls">
+        <span class="audio-icon">👂</span>
+        <button class="language-btn" id="languageBtn">English</button>
+        <span class="speaker-icon">🔊</span>
       </div>
       
       <!-- Left Panel Vertical Resizer Handle -->
@@ -886,8 +886,10 @@
         // Get current heights
         const leftPanelRect = leftPanel.getBoundingClientRect();
         const videoWrapper = document.querySelector('.video-area-wrapper');
+        const audioControls = document.querySelector('.audio-controls');
         const aiSections = document.querySelector('.ai-sections');
         const videoRect = videoWrapper.getBoundingClientRect();
+        const audioRect = audioControls.getBoundingClientRect();
         const aiRect = aiSections.getBoundingClientRect();
         
         startVideoHeight = videoRect.height;
@@ -903,10 +905,12 @@
         
         const leftPanelRect = leftPanel.getBoundingClientRect();
         const deltaY = e.clientY - startY;
-        // Subtract avatar section height and resizer height
+        // Subtract avatar section height, audio controls height, and resizer height
         const avatarSection = document.querySelector('.waiting-avatar-section');
+        const audioControls = document.querySelector('.audio-controls');
         const avatarHeight = avatarSection && avatarSection.offsetParent !== null ? avatarSection.offsetHeight : 0;
-        const panelHeight = leftPanelRect.height - avatarHeight - 4; // Subtract resizer height
+        const audioHeight = audioControls ? audioControls.offsetHeight : 0;
+        const panelHeight = leftPanelRect.height - avatarHeight - audioHeight - 4; // Subtract resizer height
         
         // Calculate new heights
         const newVideoHeight = startVideoHeight + deltaY;
