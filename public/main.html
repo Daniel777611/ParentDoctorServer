@@ -257,6 +257,10 @@
     }
     .resizer-left-vertical.dragging {
       background: var(--accent);
+      transition: none;
+    }
+    .resizer-left-vertical.dragging ~ * {
+      transition: none;
     }
     .resizer-left-vertical::before {
       content: '';
@@ -348,6 +352,10 @@
     }
     .resizer.dragging {
       background: var(--accent);
+      transition: none;
+    }
+    .resizer.dragging ~ * {
+      transition: none;
     }
     .resizer::before {
       content: '';
@@ -427,6 +435,10 @@
     }
     .resizer-vertical.dragging {
       background: var(--accent);
+      transition: none;
+    }
+    .resizer-vertical.dragging ~ * {
+      transition: none;
     }
     .resizer-vertical::before {
       content: '';
@@ -725,6 +737,7 @@
       let startX = 0;
       let startLeftWidth = 0;
       let startRightWidth = 0;
+      let rafId = null;
 
       // Load saved panel widths
       const savedLeftWidth = localStorage.getItem('leftPanelWidth');
@@ -753,35 +766,47 @@
       function resize(e) {
         if (!isResizing) return;
         
-        const containerRect = container.getBoundingClientRect();
-        // Check if center panel is visible
-        const centerPanel = document.querySelector('.panel-center');
-        const centerPanelWidth = centerPanel && centerPanel.offsetParent !== null ? 80 : 0;
-        const resizerWidth = 4;
-        const availableWidth = containerRect.width - centerPanelWidth - resizerWidth;
+        // Cancel previous animation frame
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+        }
         
-        // Calculate mouse position relative to container
-        const mouseX = e.clientX - containerRect.left;
-        
-        // Calculate new left width based on mouse position
-        let newLeftWidth = mouseX;
-        const minWidth = availableWidth * 0.2;
-        const maxWidth = availableWidth * 0.8;
-        
-        // Clamp to min/max but always update to follow mouse
-        newLeftWidth = Math.max(minWidth, Math.min(maxWidth, newLeftWidth));
-        const newRightWidth = availableWidth - newLeftWidth;
-        
-        // Always update position to follow mouse
-        const leftPercent = (newLeftWidth / availableWidth) * 100;
-        const rightPercent = (newRightWidth / availableWidth) * 100;
-        
-        document.documentElement.style.setProperty('--left-panel-width', `${leftPercent}%`);
-        document.documentElement.style.setProperty('--right-panel-width', `${rightPercent}%`);
+        // Use requestAnimationFrame for smooth updates
+        rafId = requestAnimationFrame(() => {
+          const containerRect = container.getBoundingClientRect();
+          // Check if center panel is visible
+          const centerPanel = document.querySelector('.panel-center');
+          const centerPanelWidth = centerPanel && centerPanel.offsetParent !== null ? 80 : 0;
+          const resizerWidth = 4;
+          const availableWidth = containerRect.width - centerPanelWidth - resizerWidth;
+          
+          // Calculate mouse position relative to container
+          const mouseX = e.clientX - containerRect.left;
+          
+          // Calculate new left width based on mouse position
+          let newLeftWidth = mouseX;
+          const minWidth = availableWidth * 0.2;
+          const maxWidth = availableWidth * 0.8;
+          
+          // Clamp to min/max but always update to follow mouse
+          newLeftWidth = Math.max(minWidth, Math.min(maxWidth, newLeftWidth));
+          const newRightWidth = availableWidth - newLeftWidth;
+          
+          // Always update position to follow mouse
+          const leftPercent = (newLeftWidth / availableWidth) * 100;
+          const rightPercent = (newRightWidth / availableWidth) * 100;
+          
+          document.documentElement.style.setProperty('--left-panel-width', `${leftPercent}%`);
+          document.documentElement.style.setProperty('--right-panel-width', `${rightPercent}%`);
+        });
       }
       
       function stopResize() {
         if (!isResizing) return;
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         isResizing = false;
         resizer.classList.remove('dragging');
         document.body.style.cursor = '';
@@ -816,6 +841,7 @@
       let startY = 0;
       let startReportHeight = 0;
       let startChatHeight = 0;
+      let rafId = null;
 
       // Load saved panel heights
       const savedReportHeight = localStorage.getItem('reportSectionHeight');
@@ -844,32 +870,44 @@
       function resizeVertical(e) {
         if (!isResizing) return;
         
-        const rightPanelRect = rightPanel.getBoundingClientRect();
-        const resizerHeight = 4;
-        const availableHeight = rightPanelRect.height - resizerHeight;
+        // Cancel previous animation frame
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+        }
         
-        // Calculate mouse position relative to panel
-        const mouseY = e.clientY - rightPanelRect.top;
-        
-        // Calculate new report height based on mouse position
-        let newReportHeight = mouseY;
-        const minHeight = availableHeight * 0.2;
-        const maxHeight = availableHeight * 0.8;
-        
-        // Clamp to min/max but always update to follow mouse
-        newReportHeight = Math.max(minHeight, Math.min(maxHeight, newReportHeight));
-        const newChatHeight = availableHeight - newReportHeight;
-        
-        // Always update position to follow mouse
-        const reportPercent = (newReportHeight / availableHeight) * 100;
-        const chatPercent = (newChatHeight / availableHeight) * 100;
-        
-        document.documentElement.style.setProperty('--report-section-height', `${reportPercent}%`);
-        document.documentElement.style.setProperty('--chat-section-height', `${chatPercent}%`);
+        // Use requestAnimationFrame for smooth updates
+        rafId = requestAnimationFrame(() => {
+          const rightPanelRect = rightPanel.getBoundingClientRect();
+          const resizerHeight = 4;
+          const availableHeight = rightPanelRect.height - resizerHeight;
+          
+          // Calculate mouse position relative to panel
+          const mouseY = e.clientY - rightPanelRect.top;
+          
+          // Calculate new report height based on mouse position
+          let newReportHeight = mouseY;
+          const minHeight = availableHeight * 0.2;
+          const maxHeight = availableHeight * 0.8;
+          
+          // Clamp to min/max but always update to follow mouse
+          newReportHeight = Math.max(minHeight, Math.min(maxHeight, newReportHeight));
+          const newChatHeight = availableHeight - newReportHeight;
+          
+          // Always update position to follow mouse
+          const reportPercent = (newReportHeight / availableHeight) * 100;
+          const chatPercent = (newChatHeight / availableHeight) * 100;
+          
+          document.documentElement.style.setProperty('--report-section-height', `${reportPercent}%`);
+          document.documentElement.style.setProperty('--chat-section-height', `${chatPercent}%`);
+        });
       }
       
       function stopResizeVertical() {
         if (!isResizing) return;
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         isResizing = false;
         resizerVertical.classList.remove('dragging');
         document.body.style.cursor = '';
@@ -927,37 +965,51 @@
         e.preventDefault();
       }
 
+      let rafId = null;
+      
       function resizeLeftVertical(e) {
         if (!isResizing) return;
         
-        const leftPanelRect = leftPanel.getBoundingClientRect();
-        const avatarSection = document.querySelector('.waiting-avatar-section');
-        const avatarHeight = avatarSection && avatarSection.offsetParent !== null ? avatarSection.offsetHeight : 0;
+        // Cancel previous animation frame
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+        }
         
-        // Calculate mouse position relative to panel
-        const mouseY = e.clientY - leftPanelRect.top;
-        const resizerHeight = 4;
-        const availableHeight = leftPanelRect.height - avatarHeight - resizerHeight;
-        
-        // Calculate new video height based on mouse position
-        let newVideoHeight = mouseY - avatarHeight;
-        const minHeight = availableHeight * 0.2;
-        const maxHeight = availableHeight * 0.8;
-        
-        // Clamp to min/max but always update to follow mouse
-        newVideoHeight = Math.max(minHeight, Math.min(maxHeight, newVideoHeight));
-        const newAiHeight = availableHeight - newVideoHeight;
-        
-        // Always update position to follow mouse
-        const videoPercent = (newVideoHeight / availableHeight) * 100;
-        const aiPercent = (newAiHeight / availableHeight) * 100;
-        
-        document.documentElement.style.setProperty('--video-area-height', `${videoPercent}%`);
-        document.documentElement.style.setProperty('--ai-sections-height', `${aiPercent}%`);
+        // Use requestAnimationFrame for smooth updates
+        rafId = requestAnimationFrame(() => {
+          const leftPanelRect = leftPanel.getBoundingClientRect();
+          const avatarSection = document.querySelector('.waiting-avatar-section');
+          const avatarHeight = avatarSection && avatarSection.offsetParent !== null ? avatarSection.offsetHeight : 0;
+          
+          // Calculate mouse position relative to panel
+          const mouseY = e.clientY - leftPanelRect.top;
+          const resizerHeight = 4;
+          const availableHeight = leftPanelRect.height - avatarHeight - resizerHeight;
+          
+          // Calculate new video height based on mouse position
+          let newVideoHeight = mouseY - avatarHeight;
+          const minHeight = availableHeight * 0.2;
+          const maxHeight = availableHeight * 0.8;
+          
+          // Clamp to min/max but always update to follow mouse
+          newVideoHeight = Math.max(minHeight, Math.min(maxHeight, newVideoHeight));
+          const newAiHeight = availableHeight - newVideoHeight;
+          
+          // Always update position to follow mouse
+          const videoPercent = (newVideoHeight / availableHeight) * 100;
+          const aiPercent = (newAiHeight / availableHeight) * 100;
+          
+          document.documentElement.style.setProperty('--video-area-height', `${videoPercent}%`);
+          document.documentElement.style.setProperty('--ai-sections-height', `${aiPercent}%`);
+        });
       }
       
       function stopResizeLeftVertical() {
         if (!isResizing) return;
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         isResizing = false;
         resizerLeftVertical.classList.remove('dragging');
         document.body.style.cursor = '';
