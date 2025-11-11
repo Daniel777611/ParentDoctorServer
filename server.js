@@ -9,7 +9,7 @@ const { WebSocketServer } = require("ws");
 const { Pool } = require("pg");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const { runAIReview } = require("./aiReview");
 const { sendVerificationCode } = require("./notification");
 
@@ -197,6 +197,30 @@ async function uploadToR2(file, doctorId, category) {
   }
 }
 
+// ✅ Delete File from Cloudflare R2
+async function deleteFromR2(url) {
+  if (!url || !url.includes(".r2.dev/")) return;
+
+  try {
+    // Extract key from URL: https://<ACCOUNT_ID>.r2.dev/HealthAssistance/doctor/...
+    const urlParts = url.split(".r2.dev/");
+    if (urlParts.length < 2) return;
+
+    const key = urlParts[1];
+    const command = new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    });
+
+    await r2.send(command);
+    console.log(`🗑️  Deleted from R2: ${key}`);
+    return true;
+  } catch (err) {
+    console.error(`❌ R2 Delete Failed (${url}):`, err.message);
+    return false;
+  }
+}
+
 // ✅ Doctor Registration Endpoint
 app.post(
   "/api/doctors",
@@ -257,7 +281,23 @@ app.post(
 // ✅ Clear All Data (for testing/reset)
 app.delete("/api/admin/clear-all", async (req, res) => {
   try {
-    // Delete all doctors
+    // First, get all doctors to extract file URLs
+    const { rows: doctors } = await pool.query("SELECT id_card, medical_license FROM doctor WHERE id_card IS NOT NULL OR medical_license IS NOT NULL");
+
+    // Delete files from R2
+    let deletedFiles = 0;
+    for (const doctor of doctors) {
+      if (doctor.id_card) {
+        const deleted = await deleteFromR2(doctor.id_card);
+        if (deleted) deletedFiles++;
+      }
+      if (doctor.medical_license) {
+        const deleted = await deleteFromR2(doctor.medical_license);
+        if (deleted) deletedFiles++;
+      }
+    }
+
+    // Then delete all doctors from database
     const result = await pool.query("DELETE FROM doctor");
     const deletedCount = result.rowCount || 0;
 
@@ -268,11 +308,12 @@ app.delete("/api/admin/clear-all", async (req, res) => {
       // Table might not exist, ignore
     }
 
-    console.log(`🗑️  Cleared all data: ${deletedCount} doctor(s) deleted`);
+    console.log(`🗑️  Cleared all data: ${deletedCount} doctor(s) deleted, ${deletedFiles} file(s) deleted from R2`);
     res.json({
       success: true,
-      message: `All data cleared successfully. ${deletedCount} doctor(s) deleted.`,
+      message: `All data cleared successfully. ${deletedCount} doctor(s) deleted, ${deletedFiles} file(s) deleted from R2.`,
       deletedCount,
+      deletedFiles,
     });
   } catch (err) {
     console.error("❌ Error clearing data:", err.message);
