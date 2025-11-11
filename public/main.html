@@ -13,131 +13,152 @@
       --muted: #666;
       --accent: #222;
       --success: #16a34a;
+      --blue: #3b82f6;
     }
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
     body {
       margin: 0;
       font-family: "Inter", "Segoe UI", sans-serif;
       background: var(--bg);
       color: var(--text);
-    }
-    .header {
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .header h1 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 600;
-    }
-    .header-actions {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
-    .doctor-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .doctor-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--accent);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-    }
-    .doctor-name {
-      font-weight: 500;
-    }
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      background: #dcfce7;
-      color: var(--success);
-    }
-    .status-badge::before {
-      content: "●";
-      font-size: 8px;
+      height: 100vh;
+      overflow: hidden;
     }
     .container {
       display: grid;
-      grid-template-columns: 1fr 60px 1fr;
-      gap: 24px;
-      padding: 24px;
-      max-width: 1600px;
+      grid-template-columns: 1fr 80px 1fr;
+      gap: 20px;
+      padding: 20px;
+      height: 100vh;
+      max-width: 1800px;
       margin: 0 auto;
-      height: calc(100vh - 73px);
     }
-    .panel {
-      background: var(--card);
-      border-radius: 16px;
-      padding: 24px;
-      overflow-y: auto;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
+    
+    /* Left Panel */
     .panel-left {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      background: var(--card);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
-    .panel-right {
+    
+    /* Waiting State - Video Call Area */
+    .video-call-area {
+      flex: 1;
       display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .panel-center {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
       align-items: center;
-      gap: 16px;
-    }
-    .doctor-card {
+      justify-content: center;
       background: #f9f9f9;
-      border-radius: 12px;
+      position: relative;
+    }
+    .video-call-area.waiting {
+      min-height: 400px;
+    }
+    .video-call-area.connected {
+      background: #fff;
+    }
+    .waiting-text {
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 500;
+    }
+    
+    /* Connected State - Doctor Info */
+    .doctor-header {
       padding: 20px;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
     }
-    .doctor-card-avatar {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
+    .doctor-avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
       background: var(--accent);
       color: #fff;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
       font-weight: 600;
-    }
-    .doctor-card-info h3 {
-      margin: 0 0 4px;
       font-size: 18px;
+      flex-shrink: 0;
+    }
+    .doctor-info {
+      flex: 1;
+    }
+    .doctor-name {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .doctor-status {
+      font-size: 12px;
+      color: var(--success);
+      font-weight: 500;
+    }
+    
+    /* Patient Image */
+    .patient-image-container {
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
     .patient-image {
       width: 100%;
+      max-width: 500px;
       border-radius: 12px;
+      border: 2px solid var(--blue);
       object-fit: cover;
-      max-height: 400px;
-      background: #f0f0f0;
+      display: none;
+    }
+    .patient-image.visible {
+      display: block;
+    }
+    
+    /* Audio Controls Bar */
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 16px 20px;
+      background: #f9f9f9;
+      border-top: 1px solid var(--border);
+    }
+    .audio-icon {
+      font-size: 20px;
+      color: var(--muted);
+    }
+    .language-btn {
+      padding: 8px 16px;
+      background: #e5e5e5;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .speaker-icon {
+      font-size: 20px;
+      color: var(--muted);
+    }
+    
+    /* AI Sections */
+    .ai-sections {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 12px 20px 20px;
+      border-top: 1px solid var(--border);
     }
     .ai-section {
       background: #f9f9f9;
@@ -145,41 +166,55 @@
       padding: 16px;
     }
     .ai-section h4 {
-      margin: 0 0 12px;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      margin-bottom: 12px;
     }
     .ai-section p {
-      margin: 0 0 8px;
       font-size: 14px;
       line-height: 1.6;
+      color: var(--text);
+      margin: 0;
     }
     .ai-section ul {
       margin: 0;
       padding-left: 20px;
     }
     .ai-section li {
-      margin: 4px 0;
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.8;
+      color: var(--text);
+    }
+    
+    /* Center Controls */
+    .panel-center {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
     }
     .control-btn {
-      width: 50px;
-      height: 50px;
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
       border: none;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
-      transition: transform 0.2s ease;
+      font-size: 24px;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .control-btn:hover {
       transform: scale(1.1);
+    }
+    .control-btn:active {
+      transform: scale(0.95);
     }
     .control-btn.video {
       background: var(--accent);
@@ -193,135 +228,195 @@
       background: #ef4444;
       color: #fff;
     }
+    .control-btn.active {
+      opacity: 0.7;
+    }
+    
+    /* Right Panel */
+    .panel-right {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      background: var(--card);
+      border-radius: 16px;
+      padding: 20px;
+      overflow-y: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    /* AI Summary Report */
     .report-section {
       background: #f9f9f9;
       border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 20px;
+      padding: 20px;
     }
     .report-section h4 {
-      margin: 0 0 12px;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      margin-bottom: 16px;
     }
+    .report-section p {
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    .report-section p:last-child {
+      margin-bottom: 0;
+    }
+    .report-section strong {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .report-section ul {
+      margin: 8px 0 12px 20px;
+      padding: 0;
+    }
+    .report-section li {
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 4px;
+    }
+    .report-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 16px;
+      font-style: italic;
+    }
+    
+    /* Chat History */
     .chat-section {
       background: #f9f9f9;
       border-radius: 12px;
-      padding: 16px;
-      max-height: 400px;
+      padding: 20px;
+      flex: 1;
       overflow-y: auto;
+      min-height: 300px;
+    }
+    .chat-section h4 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
     }
     .chat-message {
       margin-bottom: 16px;
-      padding: 12px;
+      padding: 12px 16px;
       border-radius: 8px;
       font-size: 14px;
       line-height: 1.6;
     }
     .chat-message.patient {
       background: #e5e5e5;
+      color: var(--text);
     }
     .chat-message.ai {
       background: #fff;
       border: 1px solid var(--border);
+      color: var(--text);
     }
     .chat-message.doctor {
       background: #dcfce7;
       border-left: 3px solid var(--success);
-    }
-    .btn {
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--card);
       color: var(--text);
+    }
+    .chat-message strong {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .chat-message ul {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+    .chat-message li {
       font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s ease;
+      line-height: 1.6;
+      margin-bottom: 4px;
     }
-    .btn:hover {
-      background: #f3f3f3;
+    
+    /* State Management */
+    .state-waiting .doctor-header,
+    .state-waiting .patient-image-container,
+    .state-waiting .ai-sections {
+      display: none;
     }
-    .language-selector {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
+    .state-connected .waiting-text {
+      display: none;
     }
-    .language-selector select {
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      font-size: 14px;
+    .state-waiting .ai-sections {
+      display: grid;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 20px 20px;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>ParentDoctor</h1>
-    <div class="header-actions">
-      <div class="doctor-info">
-        <div class="doctor-avatar" id="doctorAvatar">D</div>
-        <div>
-          <div class="doctor-name" id="doctorName">Dr. Loading...</div>
-          <div class="status-badge">Connected</div>
-        </div>
-      </div>
-      <button class="btn" onclick="logout()">Logout</button>
-    </div>
-  </div>
-
   <div class="container">
     <!-- Left Panel -->
-    <div class="panel panel-left">
-      <div class="doctor-card">
-        <div class="doctor-card-avatar" id="doctorCardAvatar">D</div>
-        <div class="doctor-card-info">
-          <h3 id="doctorCardName">Dr. Loading...</h3>
-          <div class="status-badge">Available</div>
+    <div class="panel-left">
+      <!-- Waiting State: Video Call Area -->
+      <div class="video-call-area waiting" id="videoCallArea">
+        <div class="waiting-text" id="waitingText">Waiting for video call</div>
+      </div>
+      
+      <!-- Connected State: Doctor Header -->
+      <div class="doctor-header" id="doctorHeader">
+        <div class="doctor-avatar" id="doctorAvatar">D</div>
+        <div class="doctor-info">
+          <div class="doctor-name" id="doctorName">Dr. Loading...</div>
+          <div class="doctor-status" id="doctorStatus">Connected</div>
         </div>
       </div>
-
-      <div>
-        <img id="patientImage" class="patient-image" src="https://via.placeholder.com/400x300?text=Patient+Image" alt="Patient Image">
+      
+      <!-- Connected State: Patient Image -->
+      <div class="patient-image-container" id="patientImageContainer">
+        <img src="https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=500&h=400&fit=crop" 
+             alt="Patient" 
+             class="patient-image" 
+             id="patientImage">
       </div>
-
-      <div class="language-selector">
-        <span>🔊</span>
-        <select id="languageSelect">
-          <option value="en">English</option>
-          <option value="zh">中文</option>
-          <option value="es">Español</option>
-          <option value="fr">Français</option>
-        </select>
+      
+      <!-- Audio Controls Bar -->
+      <div class="audio-controls">
+        <span class="audio-icon">👂</span>
+        <button class="language-btn" id="languageBtn">English</button>
+        <span class="speaker-icon">🔊</span>
       </div>
-
-      <div class="ai-section">
-        <h4>AI Real-time Interpreter</h4>
-        <p id="interpreterText">Waiting for patient input...</p>
-      </div>
-
-      <div class="ai-section">
-        <h4>AI Symptom Summary</h4>
-        <ul id="symptomList">
-          <li>No symptoms reported yet</li>
-        </ul>
+      
+      <!-- AI Sections -->
+      <div class="ai-sections">
+        <div class="ai-section">
+          <h4>AI Real-time Interpreter</h4>
+          <p id="interpreterText">Waiting for patient input...</p>
+        </div>
+        <div class="ai-section">
+          <h4>AI Symptom Summary</h4>
+          <ul id="symptomList">
+            <li>No symptoms reported yet</li>
+          </ul>
+        </div>
       </div>
     </div>
-
+    
     <!-- Center Controls -->
     <div class="panel-center">
       <button class="control-btn video" id="videoBtn" title="Toggle Video">📹</button>
       <button class="control-btn mic" id="micBtn" title="Toggle Microphone">🎤</button>
       <button class="control-btn hangup" id="hangupBtn" title="End Call">✕</button>
     </div>
-
+    
     <!-- Right Panel -->
-    <div class="panel panel-right">
+    <div class="panel-right">
+      <!-- AI Summary Report -->
       <div class="report-section">
         <h4>AI Summary Report</h4>
         <div id="summaryReport">
@@ -334,29 +429,15 @@
           <p id="reportConcern">-</p>
           <p><strong>AI Summary:</strong></p>
           <p id="reportSummary">-</p>
-          <p style="font-size: 12px; color: var(--muted); margin-top: 12px;">(Auto-generated from AI-Patient conversation)</p>
+          <p class="report-note">(Auto-generated from AI-Patient conversation)</p>
         </div>
       </div>
-
+      
+      <!-- AI-Patient Chat History -->
       <div class="chat-section">
-        <h4 style="margin: 0 0 16px;">AI-Patient Chat History</h4>
+        <h4>AI-Patient Chat History</h4>
         <div id="chatHistory">
-          <div class="chat-message patient">
-            <strong>Patient:</strong> My child has a fever of 38 degrees Celsius and a cough. What could be the cause, and what should I do?
-          </div>
-          <div class="chat-message ai">
-            <strong>AI:</strong> Your child's symptoms suggest a mild viral infection — common and usually not serious.
-            <br><br>
-            <strong>What You Can Do:</strong>
-            <ul style="margin: 8px 0; padding-left: 20px;">
-              <li>Keep them rested and hydrated.</li>
-              <li>Monitor their temperature and cough.</li>
-              <li>If the fever rises or symptoms worsen, seek medical attention.</li>
-            </ul>
-          </div>
-          <div class="chat-message doctor">
-            <strong>Doctor Available</strong> 👨‍⚕️ Dr. <span id="chatDoctorName">Loading...</span>, our pediatrician, is available now for an online consultation. Would you like me to connect you?
-          </div>
+          <!-- Chat messages will be dynamically added here -->
         </div>
       </div>
     </div>
@@ -375,25 +456,146 @@
 
     // Update UI with doctor info
     document.getElementById('doctorName').textContent = `Dr. ${doctorName}`;
-    document.getElementById('doctorCardName').textContent = `Dr. ${doctorName}`;
-    document.getElementById('chatDoctorName').textContent = doctorName;
     document.getElementById('doctorAvatar').textContent = initials;
-    document.getElementById('doctorCardAvatar').textContent = initials;
+
+    // State management
+    let isConnected = false;
+
+    function setState(connected) {
+      isConnected = connected;
+      const body = document.body;
+      const videoArea = document.getElementById('videoCallArea');
+      const patientImage = document.getElementById('patientImage');
+      
+      if (connected) {
+        body.classList.remove('state-waiting');
+        body.classList.add('state-connected');
+        videoArea.classList.remove('waiting');
+        videoArea.classList.add('connected');
+        patientImage.classList.add('visible');
+        
+        // Update AI sections with sample data
+        updateConnectedState();
+      } else {
+        body.classList.remove('state-connected');
+        body.classList.add('state-waiting');
+        videoArea.classList.remove('connected');
+        videoArea.classList.add('waiting');
+        patientImage.classList.remove('visible');
+        
+        // Reset to waiting state
+        resetToWaitingState();
+      }
+    }
+
+    function updateConnectedState() {
+      // Update AI Real-time Interpreter
+      document.getElementById('interpreterText').textContent = 
+        "Doctor, my baby's been coughing and feels hot. What should I do?";
+      
+      // Update AI Symptom Summary
+      const symptomList = document.getElementById('symptomList');
+      symptomList.innerHTML = `
+        <li>Mild fever (~38 °C)</li>
+        <li>Continuous coughing</li>
+        <li>Infant appears irritable and uncomfortable</li>
+        <li>Onset within the past few hours</li>
+      `;
+      
+      // Update AI Summary Report
+      document.getElementById('reportPatient').textContent = 'Infant (approx. 2-3 months old)';
+      document.getElementById('reportSymptoms').innerHTML = `
+        <li>Fever around 38 °C</li>
+        <li>Coughing since last night</li>
+        <li>Irritability and crying</li>
+      `;
+      document.getElementById('reportConcern').textContent = 
+        'Worried about possible infection and asking if medical attention is needed.';
+      document.getElementById('reportSummary').textContent = 
+        'Symptoms indicate a mild viral infection pattern; no signs of severe distress reported.';
+      
+      // Update Chat History
+      const chatHistory = document.getElementById('chatHistory');
+      chatHistory.innerHTML = `
+        <div class="chat-message patient">
+          <strong>Patient:</strong>
+          My child has a fever of 38 degrees Celsius and a cough. What could be the cause, and what should I do?
+        </div>
+        <div class="chat-message ai">
+          <strong>AI:</strong>
+          Your child's symptoms suggest a mild viral infection — common and usually not serious.
+          <br><br>
+          <strong>What You Can Do:</strong>
+          <ul>
+            <li>Keep them rested and hydrated.</li>
+            <li>Monitor their temperature and cough.</li>
+            <li>If the fever rises or symptoms worsen, seek medical attention.</li>
+          </ul>
+        </div>
+        <div class="chat-message doctor">
+          <strong>Doctor Available</strong>
+          👨‍⚕️ Dr. ${doctorName}, our pediatrician, is available now for an online consultation. Would you like me to connect you?
+        </div>
+      `;
+    }
+
+    function resetToWaitingState() {
+      document.getElementById('interpreterText').textContent = 'Waiting for patient input...';
+      document.getElementById('symptomList').innerHTML = '<li>No symptoms reported yet</li>';
+      document.getElementById('reportPatient').textContent = '-';
+      document.getElementById('reportSymptoms').innerHTML = '<li>No symptoms yet</li>';
+      document.getElementById('reportConcern').textContent = '-';
+      document.getElementById('reportSummary').textContent = '-';
+      document.getElementById('chatHistory').innerHTML = '';
+    }
 
     // Control buttons
     document.getElementById('videoBtn').addEventListener('click', () => {
-      alert('Video toggle - Coming soon');
+      const btn = document.getElementById('videoBtn');
+      btn.classList.toggle('active');
+      // Video toggle logic will be added here
     });
 
     document.getElementById('micBtn').addEventListener('click', () => {
-      alert('Microphone toggle - Coming soon');
+      const btn = document.getElementById('micBtn');
+      btn.classList.toggle('active');
+      // Microphone toggle logic will be added here
     });
 
     document.getElementById('hangupBtn').addEventListener('click', () => {
-      if (confirm('End the consultation?')) {
+      if (isConnected && confirm('End the consultation?')) {
+        setState(false);
+      } else if (!isConnected) {
+        // Logout if not connected
         logout();
       }
     });
+
+    // Language button
+    document.getElementById('languageBtn').addEventListener('click', () => {
+      const languages = ['English', '中文', 'Español', 'Français'];
+      const current = document.getElementById('languageBtn').textContent;
+      const index = languages.indexOf(current);
+      const next = languages[(index + 1) % languages.length];
+      document.getElementById('languageBtn').textContent = next;
+    });
+
+    // Simulate incoming call (for testing)
+    // In production, this will be triggered by WebSocket or API
+    setTimeout(() => {
+      // Simulate call after 3 seconds for demo
+      // setState(true);
+    }, 3000);
+
+    // Function to simulate call connection (for testing)
+    window.simulateCall = function() {
+      setState(true);
+    };
+
+    // Function to end call
+    window.endCall = function() {
+      setState(false);
+    };
 
     function logout() {
       sessionStorage.removeItem('doctorLoggedIn');
@@ -401,15 +603,8 @@
       window.location.href = '/signin.html';
     }
 
-    // Language selector
-    document.getElementById('languageSelect').addEventListener('change', (e) => {
-      console.log('Language changed to:', e.target.value);
-      // Language change logic can be added here
-    });
-
-    // Placeholder for future AI integration
-    // This will be connected to WebSocket or API for real-time updates
+    // Initialize to waiting state
+    setState(false);
   </script>
 </body>
 </html>
-
