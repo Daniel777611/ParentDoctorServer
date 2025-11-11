@@ -514,9 +514,9 @@ app.post("/api/test-write", async (_req, res) => {
   }
 });
 
-// ✅ Root Route
+// ✅ Root Route - Serve index.html
 app.get("/", (_req, res) => {
-  res.send("ParentDoctor Server (PostgreSQL + Cloudflare R2) is running.");
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // ✅ WebSocket Signaling Server
