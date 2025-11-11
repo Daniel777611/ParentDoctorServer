@@ -120,12 +120,6 @@ app.post("/api/verify/send-code", async (req, res) => {
       return res.status(400).json({ success: false, message: "Email is required." });
     }
 
-    // Check if email already registered
-    const { rows } = await pool.query("SELECT email FROM doctor WHERE lower(email) = $1 LIMIT 1", [email]);
-    if (rows.length > 0) {
-      return res.status(400).json({ success: false, message: "This email is already registered." });
-    }
-
     // Generate 6-digit code
     const code = generateVerificationCode();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
@@ -223,12 +217,6 @@ app.post(
       const stored = verificationCodes.get(emailLower);
       if (!stored || !stored.verified) {
         return res.status(400).json({ success: false, message: "Email not verified. Please verify your email first." });
-      }
-
-      // Check if email already registered
-      const { rows: existing } = await pool.query("SELECT email FROM doctor WHERE lower(email) = $1 LIMIT 1", [emailLower]);
-      if (existing.length > 0) {
-        return res.status(400).json({ success: false, message: "This email is already registered." });
       }
 
       // Generate unique doctor_id
