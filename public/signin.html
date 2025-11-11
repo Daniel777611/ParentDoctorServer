@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doctor Sign In | ParentDoctor</title>
+  <style>
+    :root{
+      --bg:#f5f5f5;
+      --card:#fff;
+      --border:#dcdcdc;
+      --text:#222;
+      --muted:#666;
+      --accent:#222;
+      --accent-hover:#000;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:var(--bg);
+      font-family:"Inter","Segoe UI",sans-serif;
+      color:var(--text);
+      padding:24px;
+    }
+    .card{
+      width:min(360px,92vw);
+      background:var(--card);
+      border-radius:24px;
+      padding:50px 42px;
+      box-shadow:0 12px 24px -18px rgba(0,0,0,0.35);
+    }
+    h1{
+      margin:0 0 28px;
+      text-align:center;
+      font-size:24px;
+      font-weight:600;
+    }
+    label{
+      display:block;
+      font-size:14px;
+      margin-bottom:6px;
+      color:var(--text);
+      font-weight:500;
+    }
+    input[type="email"]{
+      width:100%;
+      padding:12px 14px;
+      border:1px solid var(--border);
+      border-radius:10px;
+      font-size:14px;
+      outline:none;
+      transition:border 0.2s ease;
+    }
+    input[type="email"]:focus{
+      border-color:#999;
+    }
+    .btn{
+      width:100%;
+      border-radius:10px;
+      border:1px solid transparent;
+      padding:13px 0;
+      font-size:15px;
+      font-weight:600;
+      cursor:pointer;
+      transition:background 0.2s ease, border-color 0.2s ease;
+    }
+    .btn.primary{
+      background:var(--accent);
+      color:#fff;
+      margin-top:22px;
+    }
+    .btn.primary:hover{
+      background:var(--accent-hover);
+    }
+    .btn.secondary{
+      background:#fff;
+      border:1px solid var(--border);
+      color:var(--text);
+      margin-top:10px;
+    }
+    .btn.secondary:hover{
+      background:#f3f3f3;
+    }
+    .divider{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:12px;
+      color:var(--muted);
+      margin:24px 0 18px;
+    }
+    .divider::before,
+    .divider::after{
+      content:"";
+      flex:1;
+      height:1px;
+      background:var(--border);
+    }
+    .quick-actions button{
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      padding:12px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      background:#fff;
+      font-size:14px;
+      cursor:pointer;
+      margin-bottom:10px;
+      transition:background 0.2s ease;
+    }
+    .quick-actions button:hover{
+      background:#f8f8f8;
+    }
+    .note{
+      font-size:13px;
+      color:var(--muted);
+      text-align:center;
+      margin-top:12px;
+    }
+    .result{
+      margin-top:26px;
+      border:1px solid #e5e5e5;
+      border-radius:16px;
+      padding:20px 18px;
+      display:none;
+    }
+    .result.active{
+      display:block;
+    }
+    .status-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      border-radius:999px;
+      padding:8px 14px;
+      font-size:13px;
+      font-weight:600;
+      margin-bottom:14px;
+      background:#f4f4f4;
+      color:var(--text);
+    }
+    .result p{
+      margin:0 0 8px;
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.5;
+    }
+    .error{
+      margin-top:18px;
+      text-align:center;
+      color:#ef4444;
+      font-size:14px;
+    }
+    .link{
+      display:block;
+      margin-top:18px;
+      text-align:center;
+      font-size:13px;
+      color:var(--muted);
+      text-decoration:none;
+    }
+    .link:hover{
+      color:var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Doctor</h1>
+    <form id="signinForm">
+      <label for="signinEmail">Enter your Email</label>
+      <input type="email" id="signinEmail" required placeholder="name@example.com" autocomplete="email"/>
+      <button class="btn primary" id="checkBtn" type="submit">Continue</button>
+
+      <div class="divider">OR</div>
+      <div class="quick-actions">
+        <button type="button"> Continue with Apple</button>
+        <button type="button">🟢 Continue with Google</button>
+        <button type="button">📞 Continue with Phone</button>
+      </div>
+    </form>
+    <p class="note">Third-party sign in coming soon.</p>
+
+    <div id="resultBox" class="result">
+      <div id="statusPill" class="status-pill"></div>
+      <p id="statusMessage"></p>
+      <p id="notesMessage"></p>
+    </div>
+
+    <div id="errorMessage" class="error"></div>
+    <a class="link" href="/register.html">Need to register instead?</a>
+  </div>
+
+  <script>
+    const signinForm = document.getElementById("signinForm");
+    const emailInput = document.getElementById("signinEmail");
+    const checkBtn = document.getElementById("checkBtn");
+    const resultBox = document.getElementById("resultBox");
+    const statusPill = document.getElementById("statusPill");
+    const statusMessage = document.getElementById("statusMessage");
+    const notesMessage = document.getElementById("notesMessage");
+    const errorMessage = document.getElementById("errorMessage");
+
+    document.querySelectorAll(".quick-actions button").forEach((btn) => {
+      btn.addEventListener("click", () => alert("Coming soon"));
+    });
+
+    signinForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = emailInput.value.trim();
+      if (!validateEmail(email)) {
+        emailInput.focus();
+        emailInput.setCustomValidity("Please enter a valid email address");
+        emailInput.reportValidity();
+        return;
+      }
+
+      setLoading(true);
+      errorMessage.textContent = "";
+      resultBox.classList.remove("active");
+
+      try {
+        const res = await fetch("/api/doctors/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+
+        if (res.status === 404) {
+          errorMessage.textContent = "We couldn't find a registration with that email.";
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error("Server error");
+        }
+
+        const data = await res.json();
+        paintStatus(data.doctor);
+      } catch (err) {
+        errorMessage.textContent = "Something went wrong. Please try again.";
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    function paintStatus(doctor) {
+      const statusMap = {
+        approved: {
+          badge: "Approved",
+          color: "#16a34a",
+          message: "Your registration has been approved. Welcome aboard!",
+        },
+        rejected: {
+          badge: "Not Approved",
+          color: "#ef4444",
+          message: "We’re sorry, your registration was not approved.",
+        },
+        pending: {
+          badge: "Pending Review",
+          color: "#f59e0b",
+          message: "Your registration is under review. We will notify you soon.",
+        },
+      };
+
+      const status = (doctor.ai_review_status || "pending").toLowerCase();
+      const config = statusMap[status] || statusMap.pending;
+
+      statusPill.textContent = config.badge;
+      statusPill.style.background = hexToTint(config.color);
+      statusPill.style.color = config.color;
+
+      statusMessage.textContent = config.message;
+      const notes = (doctor.ai_review_notes || "").trim();
+      notesMessage.textContent = notes ? `Notes: ${notes}` : "";
+
+      resultBox.classList.add("active");
+    }
+
+    function setLoading(isLoading) {
+      checkBtn.disabled = isLoading;
+      checkBtn.textContent = isLoading ? "Checking..." : "Continue";
+    }
+
+    function validateEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function hexToTint(hex) {
+      // lighten color for pill background
+      const clean = hex.replace("#", "");
+      const num = parseInt(clean, 16);
+      const r = Math.min(255, (num >> 16) + 180);
+      const g = Math.min(255, ((num >> 8) & 0xff) + 180);
+      const b = Math.min(255, (num & 0xff) + 180);
+      return `rgba(${r}, ${g}, ${b}, 0.35)`;
+    }
+  </script>
+</body>
+</html>
+

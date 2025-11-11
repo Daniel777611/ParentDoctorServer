@@ -3,312 +3,92 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>👩‍⚕️ Doctor Video Console</title>
+  <title>Doctor Portal | ParentDoctor</title>
   <style>
-    :root { --bg:#0f0f10; --panel:#16181c; --ink:#e8eaed; --muted:#9aa0a6; --ok:#16a34a; --warn:#ef4444; }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto}
-    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-    video{width:100%;background:#000;border-radius:12px}
-    .panel{background:#16181c;border-radius:14px;padding:14px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .btn{padding:10px 16px;border:0;border-radius:10px;font-weight:700;cursor:pointer}
-    .btn.green{background:var(--ok);color:#fff}
-    .btn.red{background:var(--warn);color:#fff}
-    .log{height:220px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas;background:#0b0c0f;border-radius:10px;padding:10px;color:#cbd5e1}
-    .meter{height:10px;background:#1f2430;border-radius:999px;overflow:hidden;flex:1}
-    .bar{height:100%;width:0%;background:linear-gradient(90deg,#22c55e,#eab308 70%,#ef4444);transition:width .06s linear}
-    .label{min-width:92px;color:#9aa0a6;font-size:12px}
-    select.btn{padding:8px 10px;background:#222;color:#fff}
-    .hint{color:#9aa0a6;font-size:12px;margin-top:8px}
+    :root {
+      --bg:#f5f5f5;
+      --card:#fff;
+      --border:#dcdcdc;
+      --text:#222;
+      --accent:#222;
+      --accent-hover:#000;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:var(--bg);
+      font-family:"Inter","Segoe UI",sans-serif;
+      color:var(--text);
+      padding:24px;
+    }
+    .wrap{
+      width:min(360px,92vw);
+    }
+    .card{
+      background:var(--card);
+      border-radius:24px;
+      padding:60px 46px;
+      box-shadow:0 12px 24px -18px rgba(0,0,0,0.35);
+      text-align:center;
+    }
+    h1{
+      margin:0 0 32px;
+      font-size:24px;
+      font-weight:600;
+    }
+    .actions{
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    .btn{
+      padding:14px;
+      border-radius:12px;
+      font-size:16px;
+      font-weight:600;
+      border:1px solid transparent;
+      cursor:pointer;
+      transition:background 0.2s ease, border-color 0.2s ease;
+    }
+    .btn.primary{
+      background:var(--accent);
+      color:#fff;
+    }
+    .btn.primary:hover{
+      background:var(--accent-hover);
+    }
+    .btn.secondary{
+      background:#fff;
+      border:1px solid var(--border);
+      color:var(--text);
+    }
+    .btn.secondary:hover{
+      background:#f3f3f3;
+    }
   </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>👩‍⚕️ Doctor Video Console</h1>
-  <div class="grid">
-    <div>
-      <video id="localVideo" autoplay playsinline muted></video>
-      <div class="panel">
-        <div class="row" style="margin-bottom:8px">
-          <span class="label">Local Microphone</span>
-          <div class="meter"><div id="localBar" class="bar"></div></div>
-        </div>
-        <div class="row" style="margin-bottom:8px">
-          <span class="label">Local Camera</span>
-          <button id="btnStart" class="btn">Enable Devices</button>
-        </div>
-        <div class="row" style="gap:12px">
-          <button id="btnAccept" class="btn green" disabled>Accept</button>
-          <button id="btnHangup" class="btn red" disabled>Hang Up</button>
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <video id="remoteVideo" autoplay playsinline></video>
-      <audio id="remoteAudio" autoplay></audio>
-
-      <div class="panel">
-        <div class="row" style="margin-bottom:8px">
-          <span class="label">Speaker Level</span>
-          <div class="meter"><div id="remoteBar" class="bar"></div></div>
-        </div>
-
-        <div class="row" style="margin-bottom:8px">
-          <span class="label">Output Device</span>
-          <select id="outSel" class="btn"></select>
-          <button id="btnTestBeep" class="btn">Test Beep</button>
-        </div>
-
-        <div class="log" id="log"></div>
-        <div class="hint">
-          If black screen/freezing/no sound: Check browser camera and microphone permissions; Ensure tab is not muted; Click button to unlock audio on first use; Corporate networks may block UDP (TURN over 443 is included).
-        </div>
-      </div>
+  <div class="card">
+    <h1>Doctor</h1>
+    <div class="actions">
+      <button id="signupBtn" class="btn primary">Sign up</button>
+      <button id="signinBtn" class="btn secondary">Sign in</button>
     </div>
   </div>
 </div>
 
 <script>
-const $ = s => document.querySelector(s);
-const log = (t)=>{ const el=$("#log"); el.innerHTML += t+"<br/>"; el.scrollTop=el.scrollHeight; };
-
-let ws, pc, localStream, remoteStream;
-let localCtx=null, remoteCtx=null, localAnalyser=null, remoteAnalyser=null;
-let pendingOffer = null, remoteDescSet = false;
-const pendingRemoteCandidates = [];
-
-const wsURL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
-const rtcConfig = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "turn:global.relay.metered.ca:80", username: "open", credential: "open" },
-    { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "open", credential: "open" },
-    { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "open", credential: "open" }
-  ]
-};
-
-const btnStart = $("#btnStart");
-const btnAccept = $("#btnAccept");
-const btnHangup = $("#btnHangup");
-const outSel = $("#outSel");
-const vLocal = $("#localVideo");
-const vRemote = $("#remoteVideo");
-const aRemote = $("#remoteAudio");
-const barLocal = $("#localBar");
-const barRemote = $("#remoteBar");
-
-function ensurePeer() {
-  if (pc) return;
-  pc = new RTCPeerConnection(rtcConfig);
-
-  pc.onicecandidate = (e)=>{
-    if (e.candidate) {
-      ws.send(JSON.stringify({
-        type:"signal", from:"doctor", to:"parent",
-        payload:{ candidate: e.candidate }
-      }));
-    }
+  document.getElementById("signupBtn").onclick = () => {
+    window.location.href = "/register.html";
   };
-
-  pc.ontrack = (e)=>{
-    if (!remoteStream) {
-      remoteStream = new MediaStream();
-      vRemote.srcObject = remoteStream;
-      vRemote.muted = false; vRemote.volume = 1.0;
-      aRemote.srcObject = remoteStream; aRemote.volume = 1.0;
-      setupRemoteMeter(remoteStream);
-      forcePlay();
-    }
-    remoteStream.addTrack(e.track);
+  document.getElementById("signinBtn").onclick = () => {
+    window.location.href = "/signin.html";
   };
-
-  pc.onconnectionstatechange = ()=> log("🔗 PC state: " + pc.connectionState);
-}
-
-async function startLocal() {
-  if (localStream) return;
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30,max:30} },
-      audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true }
-    });
-    vLocal.srcObject = localStream;
-    setupLocalMeter(localStream);
-
-    ensurePeer();
-    for (const t of localStream.getTracks()) {
-      const sender = pc.addTrack(t, localStream);
-      if (t.kind === "video" && sender.getParameters) {
-        const p = sender.getParameters(); p.encodings = p.encodings || [{}];
-        p.encodings[0].maxBitrate = 1_200_000;
-        try { await sender.setParameters(p); } catch {}
-      }
-    }
-    btnStart.disabled = true;
-    log("🎥 Local stream ready.");
-  } catch(err){
-    log("❌ getUserMedia error: " + err.message);
-    alert("Camera/microphone permission required");
-  }
-}
-
-function setupLocalMeter(stream){
-  localCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const src = localCtx.createMediaStreamSource(stream);
-  localAnalyser = localCtx.createAnalyser();
-  localAnalyser.fftSize = 1024; src.connect(localAnalyser);
-  (function tick(){
-    const buf = new Float32Array(localAnalyser.fftSize);
-    localAnalyser.getFloatTimeDomainData(buf);
-    let sum=0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
-    const rms = Math.sqrt(sum/buf.length);
-    barLocal.style.width = (Math.min(1, rms*4)*100).toFixed(1)+"%";
-    requestAnimationFrame(tick);
-  })();
-}
-
-function setupRemoteMeter(stream){
-  remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const src = remoteCtx.createMediaStreamSource(stream);
-  remoteAnalyser = remoteCtx.createAnalyser();
-  remoteAnalyser.fftSize = 1024; src.connect(remoteAnalyser);
-  (function tick(){
-    const buf = new Float32Array(remoteAnalyser.fftSize);
-    remoteAnalyser.getFloatTimeDomainData(buf);
-    let sum=0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
-    const rms = Math.sqrt(sum/buf.length);
-    barRemote.style.width = (Math.min(1, rms*4)*100).toFixed(1)+"%";
-    requestAnimationFrame(tick);
-  })();
-}
-
-function connectWS(){
-  if (ws) try { ws.close(); } catch {}
-  ws = new WebSocket(wsURL);
-  ws.onopen = ()=>{
-    ws.send(JSON.stringify({type:"register", id:"doctor"}));
-    log("🔌 WS connected: "+wsURL);
-  };
-  ws.onmessage = async (ev)=>{
-    const msg = JSON.parse(ev.data||"{}");
-    if (msg.type !== "signal") return;
-    const p = msg.payload || {};
-
-    if (p.offer) {
-      pendingOffer = p.offer.sdp;
-      btnAccept.disabled = false;
-      log("📩 Offer received from parent");
-      return;
-    }
-
-    if (p.candidate) {
-      if (!remoteDescSet) {
-        pendingRemoteCandidates.push(p.candidate);
-        log("🧊 queued remote candidate");
-      } else {
-        try { await pc.addIceCandidate(new RTCIceCandidate(p.candidate)); }
-        catch(e){ log("❌ addIceCandidate: " + e.message); }
-      }
-      return;
-    }
-  };
-}
-
-async function acceptCall(){
-  btnAccept.disabled = true; btnHangup.disabled = false;
-  await startLocal();
-  ensurePeer();
-
-  try{
-    await pc.setRemoteDescription({type:"offer", sdp: pendingOffer});
-    remoteDescSet = true;
-    log("📥 setRemoteDescription(offer)");
-
-    while (pendingRemoteCandidates.length) {
-      const c = pendingRemoteCandidates.shift();
-      try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
-      catch(e){ log("❌ flush candidate: " + e.message); }
-    }
-
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    ws.send(JSON.stringify({
-      type:"signal", from:"doctor", to:"parent",
-      payload:{ answer:{ type:"answer", sdp: answer.sdp } }
-    }));
-    log("📤 Answer sent to parent");
-
-    await forcePlay();
-  }catch(e){ log("❌ accept flow: " + e.message); }
-}
-
-function hangup(){
-  btnAccept.disabled = true; btnHangup.disabled = true;
-  remoteDescSet = false; pendingRemoteCandidates.length = 0;
-  if (pc) { try { pc.close(); } catch{} pc = null; }
-  if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-  if (remoteStream){ remoteStream.getTracks().forEach(t=>t.stop()); remoteStream=null; }
-  try { localCtx && localCtx.close(); } catch{}; localCtx=null;
-  try { remoteCtx && remoteCtx.close(); } catch{}; remoteCtx=null;
-  vLocal.srcObject = null; vRemote.srcObject = null; aRemote.srcObject = null;
-  connectWS();
-}
-
-async function forcePlay(){
-  try { await localCtx?.resume?.(); } catch {}
-  try { await remoteCtx?.resume?.(); } catch {}
-  try { await vRemote.play(); } catch {}
-  try { await aRemote.play(); } catch {}
-}
-document.addEventListener("click", forcePlay, { once:true });
-document.addEventListener("keydown", forcePlay, { once:true });
-
-async function listOutputs() {
-  try {
-    const devs = await navigator.mediaDevices.enumerateDevices();
-    const outs = devs.filter(d => d.kind === "audiooutput");
-    outSel.innerHTML = "";
-    outs.forEach((d, i) => {
-      const opt = document.createElement("option");
-      opt.value = d.deviceId;
-      opt.text  = d.label || `Speaker ${i+1}`;
-      outSel.appendChild(opt);
-    });
-
-    if (typeof aRemote.setSinkId === "function") {
-      try { await aRemote.setSinkId("default"); } catch {}
-      outSel.onchange = async (e)=>{
-        try {
-          await aRemote.setSinkId(e.target.value || "default");
-          log("🔊 Output device: " + (e.target.selectedOptions[0]?.text || e.target.value));
-        } catch(err) {
-          log("❌ setSinkId failed: " + err.message);
-        }
-      };
-    } else {
-      log("ℹ️ Current browser does not support setSinkId (Safari, etc.), will use system default output device.");
-      outSel.disabled = true;
-    }
-  } catch(e){ log("❌ Failed to enumerate audio devices: " + e.message); }
-}
-navigator.mediaDevices?.addEventListener?.("devicechange", listOutputs);
-
-$("#btnTestBeep").onclick = ()=>{
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const osc = ctx.createOscillator(); const gain = ctx.createGain();
-  osc.connect(gain).connect(ctx.destination);
-  osc.type = "sine"; osc.frequency.value = 880; gain.gain.value = 0.1;
-  osc.start(); setTimeout(()=>{ osc.stop(); ctx.close(); }, 500);
-};
-
-btnStart.onclick = startLocal;
-btnAccept.onclick = acceptCall;
-btnHangup.onclick = hangup;
-
-connectWS();
-listOutputs();
 </script>
 </body>
 </html>

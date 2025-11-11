@@ -164,6 +164,34 @@ app.post(
   }
 );
 
+// ✅ Doctor Login / Status Check
+app.post("/api/doctors/login", async (req, res) => {
+  try {
+    const email = (req.body?.email || "").trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT doctor_id, first_name, last_name, email, ai_review_status, ai_review_notes, verified, created_at
+       FROM doctor
+       WHERE lower(email) = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Doctor not found." });
+    }
+
+    res.json({ success: true, doctor: rows[0] });
+  } catch (err) {
+    console.error("❌ Doctor login error:", err.message);
+    res.status(500).json({ success: false, error: "Failed to fetch doctor details." });
+  }
+});
+
 // ✅ Test Write
 app.post("/api/test-write", async (_req, res) => {
   try {

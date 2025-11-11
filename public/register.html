@@ -5,295 +5,385 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Doctor Registration | ParentDoctor</title>
   <style>
+    :root {
+      --bg: #f5f5f5;
+      --card: #fff;
+      --border: #dcdcdc;
+      --text: #222;
+      --muted: #666;
+      --accent: #222;
+      --accent-hover: #000;
+    }
+    * {
+      box-sizing: border-box;
+    }
     body {
-      font-family: 'Inter', 'Segoe UI', sans-serif;
-      background: #f5f5f5;
+      font-family: "Inter", "Segoe UI", sans-serif;
+      background: var(--bg);
       margin: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100vh;
+      padding: 24px;
     }
     .card {
-      background: #fff;
-      border-radius: 20px;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.08);
-      padding: 40px 50px;
-      width: 380px;
-      box-sizing: border-box;
+      width: min(360px, 90vw);
+      background: var(--card);
+      border-radius: 24px;
+      padding: 48px 40px;
+      box-shadow: 0 12px 24px -18px rgba(0, 0, 0, 0.35);
+      display: none;
     }
-    h2 {
+    .card.active {
+      display: block;
+    }
+    h1, h2 {
+      margin: 0 0 32px;
       text-align: center;
-      color: #222;
-      font-size: 20px;
-      margin-bottom: 30px;
+      font-size: 24px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    p.caption {
+      margin-top: -20px;
+      margin-bottom: 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
     }
     label {
-      font-size: 14px;
-      color: #333;
       display: block;
-      margin-top: 15px;
-      margin-bottom: 6px;
-    }
-    input[type="text"], input[type="file"] {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
       font-size: 14px;
-      box-sizing: border-box;
+      color: var(--text);
+      margin-bottom: 6px;
+      font-weight: 500;
     }
-    
-    button {
+    input[type="text"],
+    input[type="email"],
+    input[type="file"] {
       width: 100%;
-      margin-top: 30px;
-      background: #333;
-      color: #fff;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s ease;
+    }
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    input[type="file"]:focus {
+      border-color: #888;
+    }
+    .btn {
+      width: 100%;
       border: none;
+      border-radius: 10px;
       padding: 12px 0;
-      border-radius: 6px;
       font-size: 15px;
       font-weight: 600;
       cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
     }
-    button:hover {
-      background: #000;
+    .btn.primary {
+      background: var(--accent);
+      color: #fff;
+      margin-top: 28px;
     }
-    .msg {
-      text-align: center;
-      font-size: 14px;
+    .btn.primary:hover {
+      background: var(--accent-hover);
+    }
+    .btn.secondary {
+      background: #fff;
+      border: 1px solid var(--border);
+      color: var(--text);
       margin-top: 10px;
     }
-
-    .preview-box {
-    margin-top: 8px;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-  }
-
-  .preview-box img {
-    max-width: 150px;
-    max-height: 100px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    object-fit: cover;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
-
-  .preview-box span {
-    font-size: 13px;
-    color: #555;
-  }
-
-  .upload-group {
-    margin-bottom: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .upload-btn {
-  outline: none;
-  }
-
-  .plus-btn {
-  display: inline-block;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid #999;
-  font-size: 20px;
-  line-height: 26px;
-  text-align: center;
-  background-color: #fff;
-  transition: all 0.2s ease;
-  outline: none;            /* Remove focus outline */
-  box-shadow: none;         /* Prevent blue glow border */
-  }
-
-  .plus-btn:focus {
-  outline: none;            /* Prevent dotted line on tab focus */
-  box-shadow: none;
-  }
-
-  .upload-btn:focus-within {
-  outline: none;
-  }
-
-  .plus-btn:hover {
-    background-color: #f5f5f5;
-  }
-
-  .preview-minimal {
-    margin-top: 8px;
-    font-size: 13px;
-    color: #333;
-  }
-
-  .preview-minimal img {
-    display: block;
-    width: 80px;
-    height: 60px;
-    border-radius: 5px;
-    border: 1px solid #ddd;
-    object-fit: cover;
-    margin-top: 4px;
-  }
-
-  .preview-minimal span {
-    color: green;
-    font-size: 12px;
-    margin-left: 4px;
-  }
-
+    .btn.secondary:hover {
+      background: #f1f1f1;
+    }
+    .divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 28px 0 18px;
+    }
+    .divider::before,
+    .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .quick-actions button {
+      width: 100%;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--text);
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: background 0.2s ease;
+    }
+    .quick-actions button:hover {
+      background: #f8f8f8;
+    }
+    .email-pill {
+      background: #f3f3f3;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 22px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .email-pill button {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .upload-group {
+      margin-top: 18px;
+    }
+    .upload-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px dashed var(--border);
+      font-size: 20px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .upload-trigger:hover {
+      background: #f8f8f8;
+    }
+    .preview-minimal {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .preview-minimal img {
+      display: block;
+      width: 88px;
+      height: 62px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      object-fit: cover;
+      margin-top: 6px;
+    }
+    .preview-minimal span {
+      color: #16a34a;
+      font-size: 12px;
+      margin-left: 4px;
+    }
+    .note {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 16px;
+    }
+    .msg {
+      margin-top: 18px;
+      text-align: center;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>Doctor Registration</h2>
+  <div id="stepEmail" class="card active">
+    <h1>Doctor</h1>
+    <form id="emailForm">
+      <label for="email">Enter your Email</label>
+      <input type="email" id="email" required placeholder="name@example.com" autocomplete="email" />
+      <button id="continueBtn" class="btn primary" type="submit">Continue</button>
+
+      <div class="divider">OR</div>
+      <div class="quick-actions">
+        <button type="button" data-provider="apple"> Continue with Apple</button>
+        <button type="button" data-provider="google">🟢 Continue with Google</button>
+        <button type="button" data-provider="phone">📞 Continue with Phone</button>
+      </div>
+    </form>
+    <p class="note">Third-party sign up coming soon.</p>
+  </div>
+
+  <div id="stepForm" class="card">
+    <h2>Complete Registration</h2>
+    <div class="email-pill" id="emailDisplay">
+      <span id="emailLabel"></span>
+      <button type="button" id="changeEmailBtn">Change</button>
+    </div>
+
     <form id="doctorForm" enctype="multipart/form-data">
-      <label for="first_name">First Name</label>
-      <input type="text" id="first_name" required />
+      <div class="two-col">
+        <div>
+          <label for="first_name">First Name</label>
+          <input type="text" id="first_name" required autocomplete="given-name" />
+        </div>
+        <div>
+          <label for="last_name">Last Name</label>
+          <input type="text" id="last_name" required autocomplete="family-name" />
+        </div>
+      </div>
 
-      <label for="last_name">Last Name</label>
-      <input type="text" id="last_name" required />
+      <label for="major" style="margin-top:18px;">Major</label>
+      <input type="text" id="major" required placeholder="e.g., Pediatrics" autocomplete="organization-title" />
 
-      <label for="major">Major</label>
-      <input type="text" id="major" placeholder="e.g., Pediatrics" required />
+      <label for="nation" style="margin-top:18px;">Nation</label>
+      <input type="text" id="nation" required autocomplete="country-name" />
 
-
-      <label for="nation">Nation</label>
-      <input type="text" id="nation" required />
-
-      <label for="email">Email</label>
-      <input type="text" id="email" required />
-
-      <label for="phone">Phone</label>
-      <input type="text" id="phone" />
-
+      <label for="phone" style="margin-top:18px;">Phone</label>
+      <input type="text" id="phone" placeholder="+1 555 0100" autocomplete="tel" />
 
       <div class="upload-group">
         <label>Upload your ID</label>
-        <label class="upload-btn">
-            <input type="file" id="id_upload" name="id_card" accept="image/*,application/pdf" hidden>
-            <span class="plus-btn">＋</span>
+        <label class="upload-trigger">
+          <input type="file" id="id_upload" name="id_card" accept="image/*,application/pdf" hidden />
+          <span>＋</span>
         </label>
         <div id="id_preview" class="preview-minimal"></div>
-        </div>
+      </div>
 
-        <div class="upload-group">
+      <div class="upload-group">
         <label>Upload Medical License</label>
-        <label class="upload-btn">
-            <input type="file" id="license_upload" name="medical_license" accept="image/*,application/pdf" hidden>
-            <span class="plus-btn">＋</span>
+        <label class="upload-trigger">
+          <input type="file" id="license_upload" name="medical_license" accept="image/*,application/pdf" hidden />
+          <span>＋</span>
         </label>
         <div id="license_preview" class="preview-minimal"></div>
+      </div>
 
-      <button type="submit">SUBMIT</button>
+      <input type="hidden" id="email_hidden" name="email" />
+      <button class="btn primary" type="submit">Submit</button>
     </form>
     <div class="msg" id="msg"></div>
   </div>
 
   <script>
-  const form = document.getElementById('doctorForm');
-  const msg = document.getElementById('msg');
+    const stepEmail = document.getElementById("stepEmail");
+    const stepForm = document.getElementById("stepForm");
+    const emailForm = document.getElementById("emailForm");
+    const doctorForm = document.getElementById("doctorForm");
+    const emailInput = document.getElementById("email");
+    const emailHidden = document.getElementById("email_hidden");
+    const emailLabel = document.getElementById("emailLabel");
+    const changeEmailBtn = document.getElementById("changeEmailBtn");
+    const msg = document.getElementById("msg");
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    msg.textContent = "Submitting...";
+    let capturedEmail = "";
 
-    const formData = new FormData();
-    formData.append('first_name', document.getElementById('first_name').value);
-    formData.append('last_name', document.getElementById('last_name').value);
-    formData.append('major', document.getElementById('major').value);
-    formData.append('nation', document.getElementById('nation').value);
-    formData.append('email', document.getElementById('email').value);
-    formData.append('phone', document.getElementById('phone').value);
-    formData.append('id_card', document.getElementById('id_upload').files[0]);
-    formData.append('medical_license', document.getElementById('license_upload').files[0]);
+    const quickActionButtons = document.querySelectorAll(".quick-actions button");
+    quickActionButtons.forEach((btn) => {
+      btn.addEventListener("click", () => alert("Coming soon"));
+    });
 
-    try {
-      const res = await fetch('/api/doctors', {
-        method: 'POST',
-        body: formData
-      });
-
-      const result = await res.json();
-      if (result.success) {
-        msg.style.color = 'green';
-        msg.textContent = "✅ Registration successful. Redirecting...";
-        setTimeout(() => window.location.href = '/thankyou.html', 1500);
-      } else {
-        msg.style.color = 'red';
-        msg.textContent = "❌ " + (result.message || "Registration failed.");
+    emailForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const value = emailInput.value.trim();
+      if (!validateEmail(value)) {
+        emailInput.focus();
+        emailInput.setCustomValidity("Please enter a valid email address");
+        emailInput.reportValidity();
+        return;
       }
-    } catch (err) {
-      msg.style.color = 'red';
-      msg.textContent = "❌ Network error.";
+      capturedEmail = value;
+      emailHidden.value = capturedEmail;
+      emailLabel.textContent = capturedEmail;
+      stepEmail.classList.remove("active");
+      stepForm.classList.add("active");
+    });
+
+    changeEmailBtn.addEventListener("click", () => {
+      stepForm.classList.remove("active");
+      stepEmail.classList.add("active");
+      setTimeout(() => emailInput.focus(), 50);
+    });
+
+    doctorForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.textContent = "Submitting...";
+      msg.style.color = "#555";
+
+      const formData = new FormData();
+      formData.append("first_name", document.getElementById("first_name").value.trim());
+      formData.append("last_name", document.getElementById("last_name").value.trim());
+      formData.append("major", document.getElementById("major").value.trim());
+      formData.append("nation", document.getElementById("nation").value.trim());
+      formData.append("email", capturedEmail);
+      formData.append("phone", document.getElementById("phone").value.trim());
+      formData.append("id_card", document.getElementById("id_upload").files[0] || "");
+      formData.append("medical_license", document.getElementById("license_upload").files[0] || "");
+
+      try {
+        const res = await fetch("/api/doctors", {
+          method: "POST",
+          body: formData,
+        });
+        const result = await res.json();
+        if (result.success) {
+          msg.style.color = "green";
+          msg.textContent = "Registration successful. Redirecting…";
+          setTimeout(() => (window.location.href = "/thankyou.html"), 1200);
+        } else {
+          msg.style.color = "red";
+          msg.textContent = "❌ " + (result.message || "Registration failed.");
+        }
+      } catch (err) {
+        msg.style.color = "red";
+        msg.textContent = "❌ Network error. Please try again.";
+      }
+    });
+
+    document.getElementById("id_upload").addEventListener("change", (e) => {
+      showPreview(e.target, "id_preview");
+    });
+    document.getElementById("license_upload").addEventListener("change", (e) => {
+      showPreview(e.target, "license_preview");
+    });
+
+    function showPreview(input, previewId) {
+      const file = input.files[0];
+      const previewBox = document.getElementById(previewId);
+      previewBox.innerHTML = "";
+      if (!file) return;
+
+      if (file.type.startsWith("image/")) {
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(file);
+        previewBox.appendChild(img);
+      } else {
+        previewBox.textContent = `📄 ${file.name}`;
+      }
+
+      const ok = document.createElement("span");
+      ok.textContent = "✔ Uploaded";
+      previewBox.appendChild(ok);
     }
-  });
-  function showPreview(input, previewId) {
-    const file = input.files[0];
-    const previewBox = document.getElementById(previewId);
-    previewBox.innerHTML = ""; // Clear old content
 
-    if (!file) return;
-
-    // If it's an image file
-    if (file.type.startsWith("image/")) {
-      const img = document.createElement("img");
-      img.src = URL.createObjectURL(file);
-      previewBox.appendChild(img);
+    function validateEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     }
-    // If it's a PDF or other file type
-    else {
-      const span = document.createElement("span");
-      span.textContent = `📄 ${file.name}`;
-      previewBox.appendChild(span);
-    }
-    previewBox.insertAdjacentHTML('beforeend', '<span style="color:green;margin-left:5px;"> Uploaded ✔</span>');
-
-  }
-
-  // Listen for file selection events
-  document.getElementById("id_upload").addEventListener("change", (e) => {
-    showPreview(e.target, "id_preview");
-  });
-
-  document.getElementById("license_upload").addEventListener("change", (e) => {
-    showPreview(e.target, "license_preview");
-  });
-
-  function showMinimalPreview(input, previewId) {
-    const file = input.files[0];
-    const previewBox = document.getElementById(previewId);
-    previewBox.innerHTML = "";
-
-    if (!file) return;
-
-    if (file.type.startsWith("image/")) {
-      const img = document.createElement("img");
-      img.src = URL.createObjectURL(file);
-      previewBox.appendChild(img);
-    } else {
-      previewBox.textContent = `📄 ${file.name}`;
-    }
-
-    const ok = document.createElement("span");
-    ok.textContent = "✔ Uploaded";
-    previewBox.appendChild(ok);
-  }
-
-  // File selection listener
-  document.getElementById("id_upload").addEventListener("change", (e) => {
-    showMinimalPreview(e.target, "id_preview");
-  });
-
-  document.getElementById("license_upload").addEventListener("change", (e) => {
-    showMinimalPreview(e.target, "license_preview");
-  });
-</script>
-
+  </script>
 </body>
 </html>
