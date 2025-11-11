@@ -1047,6 +1047,19 @@
       document.addEventListener('mousemove', resizeLeftVertical);
       document.addEventListener('mouseup', stopResizeLeftVertical);
       document.addEventListener('mouseleave', stopResizeLeftVertical);
+      
+      // Ensure AI sections are visible on page load
+      window.addEventListener('load', () => {
+        const aiSections = document.querySelector('.ai-sections');
+        if (aiSections) {
+          const computedStyle = window.getComputedStyle(aiSections);
+          if (computedStyle.display === 'none' || computedStyle.height === '0px') {
+            // Reset to default if hidden
+            document.documentElement.style.removeProperty('--ai-sections-height');
+            localStorage.removeItem('aiSectionsHeight');
+          }
+        }
+      });
     })();
 
     // Load doctor data
