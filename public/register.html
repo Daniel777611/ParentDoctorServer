@@ -203,6 +203,21 @@
       text-align: center;
       margin-top: 16px;
     }
+    .resend-link {
+      display: block;
+      text-align: center;
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--text);
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .resend-link:hover {
+      color: var(--accent);
+    }
     .msg {
       margin-top: 18px;
       text-align: center;
@@ -230,15 +245,20 @@
   </div>
 
   <div id="stepVerify" class="card">
-    <h2>Verify your Email</h2>
-    <p class="caption">Enter the verification code we just sent to <strong id="verifyEmail"></strong></p>
+    <p class="caption">Enter the Verification code we just sent to <strong id="verifyEmail"></strong></p>
     <form id="verifyForm">
-      <label for="code">Verification Code</label>
-      <input type="text" id="code" required placeholder="000000" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:20px;letter-spacing:4px;font-family:monospace;" />
+      <input type="text" id="code" required placeholder="" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:20px;letter-spacing:4px;font-family:monospace;" />
       <button id="verifyBtn" class="btn primary" type="submit">Continue</button>
-      <button type="button" id="resendBtn" class="btn secondary">Resend Code</button>
-      <button type="button" id="changeEmailBtn2" class="btn secondary" style="margin-top:8px;">Change Email</button>
+      <a href="#" id="resendBtn" class="resend-link">Resent</a>
     </form>
+
+    <div class="divider">OR</div>
+    <div class="quick-actions">
+      <button type="button" data-provider="apple">Continue with Apple</button>
+      <button type="button" data-provider="google">🟢 Continue with Goole</button>
+      <button type="button" data-provider="phone">📞 Continue with Phone</button>
+    </div>
+    <p class="note">Third-party sign up coming soon.</p>
     <div class="msg" id="verifyMsg"></div>
   </div>
 
@@ -410,33 +430,6 @@
       }
     });
 
-    // Resend code
-    resendBtn.addEventListener("click", async () => {
-      setLoading(resendBtn, true);
-      verifyMsg.textContent = "";
-
-      try {
-        const res = await fetch("/api/verify/send-code", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: capturedEmail }),
-        });
-
-        const result = await res.json();
-        if (result.success) {
-          verifyMsg.style.color = "green";
-          verifyMsg.textContent = "✅ New code sent! Check your email.";
-        } else {
-          verifyMsg.style.color = "red";
-          verifyMsg.textContent = "❌ " + (result.message || "Failed to resend.");
-        }
-      } catch (err) {
-        verifyMsg.style.color = "red";
-        verifyMsg.textContent = "❌ Network error. Please try again.";
-      } finally {
-        setLoading(resendBtn, false);
-      }
-    });
 
     // Change email buttons
     changeEmailBtn2.addEventListener("click", () => {
@@ -499,12 +492,22 @@
     });
 
     function setLoading(btn, isLoading) {
-      btn.disabled = isLoading;
-      if (isLoading) {
-        btn.dataset.originalText = btn.textContent;
-        btn.textContent = "Loading...";
-      } else {
-        btn.textContent = btn.dataset.originalText || "Continue";
+      if (btn.tagName === "BUTTON") {
+        btn.disabled = isLoading;
+        if (isLoading) {
+          btn.dataset.originalText = btn.textContent;
+          btn.textContent = "Loading...";
+        } else {
+          btn.textContent = btn.dataset.originalText || "Continue";
+        }
+      } else if (btn.tagName === "A") {
+        if (isLoading) {
+          btn.style.pointerEvents = "none";
+          btn.style.opacity = "0.6";
+        } else {
+          btn.style.pointerEvents = "auto";
+          btn.style.opacity = "1";
+        }
       }
     }
 
