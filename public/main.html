@@ -279,6 +279,7 @@
       min-height: 200px;
       position: relative;
       overflow: hidden;
+      background: var(--card);
     }
     
     /* Audio Controls Bar - part of AI sections */
@@ -948,9 +949,16 @@
         // Validate saved values
         const videoPercent = parseFloat(savedVideoHeight);
         const aiPercent = parseFloat(savedAiHeight);
-        if (!isNaN(videoPercent) && !isNaN(aiPercent) && videoPercent > 0 && aiPercent > 0) {
+        // Ensure both values are valid and reasonable (between 10% and 90%)
+        if (!isNaN(videoPercent) && !isNaN(aiPercent) && 
+            videoPercent >= 10 && videoPercent <= 90 && 
+            aiPercent >= 10 && aiPercent <= 90) {
           document.documentElement.style.setProperty('--video-area-height', savedVideoHeight);
           document.documentElement.style.setProperty('--ai-sections-height', savedAiHeight);
+        } else {
+          // Clear invalid values
+          localStorage.removeItem('videoAreaHeight');
+          localStorage.removeItem('aiSectionsHeight');
         }
       }
 
