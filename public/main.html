@@ -42,7 +42,7 @@
     /* Left Panel */
     .panel-left {
       display: grid;
-      grid-template-rows: auto var(--video-area-height, 1fr) auto 4px var(--ai-sections-height, auto);
+      grid-template-rows: auto var(--video-area-height, 1fr) 4px var(--ai-sections-height, auto);
       background: var(--card);
       border-right: 1px solid var(--border);
       position: relative;
@@ -219,7 +219,7 @@
       justify-content: center;
       gap: 12px;
       padding: 16px 20px;
-      background: var(--card);
+      background: #e5e5e5;
       border-top: 1px solid var(--border);
       border-bottom: 1px solid var(--border);
     }
@@ -270,11 +270,25 @@
     
     /* AI Sections */
     .ai-sections {
+      display: flex;
+      flex-direction: column;
+      min-height: 200px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    /* Audio Controls Bar - part of AI sections */
+    .ai-sections .audio-controls {
+      flex-shrink: 0;
+      order: -1; /* Place at the top of AI sections */
+    }
+    
+    /* AI Sections Content */
+    .ai-sections-content {
       display: grid;
       grid-template-columns: 1fr 1fr;
       padding: 20px;
-      min-height: 200px;
-      position: relative;
+      flex: 1;
       overflow-y: auto;
     }
     .ai-section {
@@ -632,25 +646,28 @@
         
       </div>
       
-      <!-- Audio Controls Bar -->
-      <div class="audio-controls">
-        <span class="audio-icon">👂</span>
-        <button class="language-btn" id="languageBtn">English</button>
-        <span class="speaker-icon">🔊</span>
-      </div>
-      
       <!-- Left Panel Vertical Resizer Handle -->
       <div class="resizer-left-vertical" id="resizerLeftVertical"></div>
       
       <!-- AI Sections -->
       <div class="ai-sections">
-        <div class="ai-section">
-          <h4>AI Real-time Interpreter</h4>
-          <div id="interpreterText"></div>
+        <!-- Audio Controls Bar -->
+        <div class="audio-controls">
+          <span class="audio-icon">👂</span>
+          <button class="language-btn" id="languageBtn">English</button>
+          <span class="speaker-icon">🔊</span>
         </div>
-        <div class="ai-section">
-          <h4>AI Symptom Summary</h4>
-          <ul id="symptomList"></ul>
+        
+        <!-- AI Sections Content -->
+        <div class="ai-sections-content">
+          <div class="ai-section">
+            <h4>AI Real-time Interpreter</h4>
+            <div id="interpreterText"></div>
+          </div>
+          <div class="ai-section">
+            <h4>AI Symptom Summary</h4>
+            <ul id="symptomList"></ul>
+          </div>
         </div>
       </div>
     </div>
@@ -886,10 +903,8 @@
         // Get current heights
         const leftPanelRect = leftPanel.getBoundingClientRect();
         const videoWrapper = document.querySelector('.video-area-wrapper');
-        const audioControls = document.querySelector('.audio-controls');
         const aiSections = document.querySelector('.ai-sections');
         const videoRect = videoWrapper.getBoundingClientRect();
-        const audioRect = audioControls.getBoundingClientRect();
         const aiRect = aiSections.getBoundingClientRect();
         
         startVideoHeight = videoRect.height;
@@ -905,12 +920,10 @@
         
         const leftPanelRect = leftPanel.getBoundingClientRect();
         const deltaY = e.clientY - startY;
-        // Subtract avatar section height, audio controls height, and resizer height
+        // Subtract avatar section height and resizer height
         const avatarSection = document.querySelector('.waiting-avatar-section');
-        const audioControls = document.querySelector('.audio-controls');
         const avatarHeight = avatarSection && avatarSection.offsetParent !== null ? avatarSection.offsetHeight : 0;
-        const audioHeight = audioControls ? audioControls.offsetHeight : 0;
-        const panelHeight = leftPanelRect.height - avatarHeight - audioHeight - 4; // Subtract resizer height
+        const panelHeight = leftPanelRect.height - avatarHeight - 4; // Subtract resizer height
         
         // Calculate new heights
         const newVideoHeight = startVideoHeight + deltaY;
