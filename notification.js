@@ -51,8 +51,8 @@ async function sendEmailNotification(email, firstName, lastName, status, notes) 
   try {
     const isApproved = status === "approved";
     const subject = isApproved
-      ? "🎉 Doctor Registration Approved - ParentDoctor"
-      : "❌ Doctor Registration Not Approved - ParentDoctor";
+      ? "🎉 Doctor Registration Approved - Torahnest Health"
+      : "❌ Doctor Registration Not Approved - Torahnest Health";
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -75,7 +75,7 @@ async function sendEmailNotification(email, firstName, lastName, status, notes) 
           </div>
           <div class="content">
             <p>Dear Dr. ${firstName} ${lastName},</p>
-            <p>Thank you for registering with ParentDoctor platform.</p>
+            <p>Thank you for registering with Torahnest Health platform.</p>
             <div class="status">
               ${isApproved ? "🎉 Congratulations! Your registration has been approved." : "We regret to inform you that your registration has not been approved."}
             </div>
@@ -85,7 +85,7 @@ async function sendEmailNotification(email, firstName, lastName, status, notes) 
               : `<p>If you have any questions, please contact our support team.</p>`
             }
             <div class="footer">
-              <p>This email is automatically sent by ParentDoctor system. Please do not reply.</p>
+              <p>This email is automatically sent by Torahnest Health system. Please do not reply.</p>
             </div>
           </div>
         </div>
@@ -96,7 +96,7 @@ async function sendEmailNotification(email, firstName, lastName, status, notes) 
     const textContent = `
 Dear Dr. ${firstName} ${lastName},
 
-Thank you for registering with ParentDoctor platform.
+Thank you for registering with Torahnest Health platform.
 
 ${isApproved ? "🎉 Congratulations! Your registration has been approved." : "We regret to inform you that your registration has not been approved."}
 
@@ -107,11 +107,11 @@ ${isApproved
   : "If you have any questions, please contact our support team."
 }
 
-This email is automatically sent by ParentDoctor system. Please do not reply.
+This email is automatically sent by Torahnest Health system. Please do not reply.
     `;
 
     const info = await mailTransporter.sendMail({
-      from: `"ParentDoctor" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      from: `"Torahnest Health" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
       to: email,
       subject: subject,
       text: textContent,
@@ -159,8 +159,8 @@ async function sendSMSNotification(phone, firstName, lastName, status) {
   try {
     const isApproved = status === "approved";
     const message = isApproved
-      ? `🎉 Dear Dr. ${firstName} ${lastName}, your ParentDoctor registration has been approved. You can now log in and start providing services.`
-      : `❌ Dear Dr. ${firstName} ${lastName}, we regret to inform you that your ParentDoctor registration has not been approved. Please contact support if you have questions.`;
+      ? `🎉 Dear Dr. ${firstName} ${lastName}, your Torahnest Health registration has been approved. You can now log in and start providing services.`
+      : `❌ Dear Dr. ${firstName} ${lastName}, we regret to inform you that your Torahnest Health registration has not been approved. Please contact support if you have questions.`;
 
     // Ensure phone number format is correct (must include country code)
     let formattedPhone = phone.trim();
@@ -255,18 +255,18 @@ async function sendVerificationCode(email, code) {
       <body>
         <div class="container">
           <div class="header">
-            <h1>ParentDoctor Email Verification</h1>
+            <h1>Torahnest Health Email Verification</h1>
           </div>
           <div class="content">
             <p>Hello,</p>
-            <p>Thank you for registering with ParentDoctor. Please use the verification code below to complete your registration:</p>
+            <p>Thank you for registering with Torahnest Health. Please use the verification code below to complete your registration:</p>
             <div class="code-box">
               <div class="code">${code}</div>
             </div>
             <p>This code will expire in 10 minutes.</p>
             <p>If you didn't request this code, please ignore this email.</p>
             <div class="footer">
-              <p>This email is automatically sent by ParentDoctor system. Please do not reply.</p>
+              <p>This email is automatically sent by Torahnest Health system. Please do not reply.</p>
             </div>
           </div>
         </div>
@@ -277,7 +277,7 @@ async function sendVerificationCode(email, code) {
     const textContent = `
 Hello,
 
-Thank you for registering with ParentDoctor. Please use the verification code below to complete your registration:
+Thank you for registering with Torahnest Health. Please use the verification code below to complete your registration:
 
 ${code}
 
@@ -285,13 +285,13 @@ This code will expire in 10 minutes.
 
 If you didn't request this code, please ignore this email.
 
-This email is automatically sent by ParentDoctor system. Please do not reply.
+This email is automatically sent by Torahnest Health system. Please do not reply.
     `;
 
     const info = await mailTransporter.sendMail({
-      from: `"ParentDoctor" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      from: `"Torahnest Health" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
       to: email,
-      subject: "ParentDoctor Email Verification Code",
+      subject: "Torahnest Health Email Verification Code",
       text: textContent,
       html: htmlContent,
     });
