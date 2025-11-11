@@ -46,6 +46,55 @@
       border-right: 1px solid var(--border);
     }
     
+    /* Waiting State - Doctor Avatar Section */
+    .waiting-avatar-section {
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .waiting-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+    .waiting-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+    .waiting-avatar-upload-btn {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      color: #fff;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .waiting-avatar:hover .waiting-avatar-upload-btn {
+      opacity: 1;
+    }
     /* Waiting State - Video Call Area */
     .video-call-area {
       flex: 1;
@@ -375,7 +424,13 @@
     .state-waiting .patient-image-container {
       display: none;
     }
+    .state-waiting .waiting-avatar-section {
+      display: flex;
+    }
     .state-connected .waiting-text {
+      display: none;
+    }
+    .state-connected .waiting-avatar-section {
       display: none;
     }
     .state-waiting .video-call-area {
@@ -395,6 +450,15 @@
   <div class="container">
     <!-- Left Panel -->
     <div class="panel-left">
+      <!-- Waiting State: Doctor Avatar -->
+      <div class="waiting-avatar-section" id="waitingAvatarSection">
+        <div class="waiting-avatar" id="waitingAvatar">
+          <span id="waitingAvatarInitials">D</span>
+          <input type="file" id="waitingAvatarUploadInput" class="avatar-upload-input" accept="image/*" />
+          <div class="waiting-avatar-upload-btn" id="waitingAvatarUploadBtn" title="Upload photo">📷</div>
+        </div>
+      </div>
+      
       <!-- Waiting State: Video Call Area -->
       <div class="video-call-area waiting" id="videoCallArea">
         <div class="waiting-text" id="waitingText">Waiting for video call</div>
@@ -493,8 +557,9 @@
     // Update UI with doctor info
     document.getElementById('doctorName').textContent = `Dr. ${doctorName}`;
     updateAvatarDisplay(doctorData.avatar, initials);
+    updateWaitingAvatarDisplay(doctorData.avatar, initials);
 
-    // Avatar upload functionality
+    // Avatar upload functionality (connected state)
     const avatarUploadInput = document.getElementById('avatarUploadInput');
     const avatarUploadBtn = document.getElementById('avatarUploadBtn');
     
@@ -534,6 +599,60 @@
           doctorData.avatar = result.doctor.avatar;
           sessionStorage.setItem('doctorData', JSON.stringify(doctorData));
           updateAvatarDisplay(result.doctor.avatar, initials);
+          updateWaitingAvatarDisplay(result.doctor.avatar, initials);
+          alert('Avatar updated successfully!');
+        } else {
+          alert('Failed to update avatar: ' + (result.message || 'Unknown error'));
+        }
+      } catch (err) {
+        console.error('Error uploading avatar:', err);
+        alert('Network error. Please try again.');
+      }
+      
+      e.target.value = '';
+    });
+
+    // Avatar upload functionality (waiting state)
+    const waitingAvatarUploadInput = document.getElementById('waitingAvatarUploadInput');
+    const waitingAvatarUploadBtn = document.getElementById('waitingAvatarUploadBtn');
+    
+    waitingAvatarUploadBtn.addEventListener('click', () => {
+      waitingAvatarUploadInput.click();
+    });
+    
+    waitingAvatarUploadInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Avatar file size should be less than 5MB');
+        e.target.value = '';
+        return;
+      }
+      
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        e.target.value = '';
+        return;
+      }
+      
+      const formData = new FormData();
+      formData.append('avatar', file);
+      formData.append('doctor_id', doctorData.doctor_id);
+      
+      try {
+        const res = await fetch('/api/doctors/avatar', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+          // Update sessionStorage with new avatar
+          doctorData.avatar = result.doctor.avatar;
+          sessionStorage.setItem('doctorData', JSON.stringify(doctorData));
+          updateAvatarDisplay(result.doctor.avatar, initials);
+          updateWaitingAvatarDisplay(result.doctor.avatar, initials);
           alert('Avatar updated successfully!');
         } else {
           alert('Failed to update avatar: ' + (result.message || 'Unknown error'));
@@ -549,6 +668,33 @@
     function updateAvatarDisplay(avatarUrl, initials) {
       const avatarElement = document.getElementById('doctorAvatar');
       const initialsElement = document.getElementById('avatarInitials');
+      
+      if (avatarUrl) {
+        // Remove initials text
+        initialsElement.style.display = 'none';
+        // Add or update image
+        let img = avatarElement.querySelector('img');
+        if (!img) {
+          img = document.createElement('img');
+          avatarElement.insertBefore(img, initialsElement);
+        }
+        img.src = avatarUrl;
+        img.alt = 'Doctor Avatar';
+        avatarElement.style.background = 'transparent';
+      } else {
+        // Show initials
+        initialsElement.style.display = 'flex';
+        initialsElement.textContent = initials;
+        // Remove image if exists
+        const img = avatarElement.querySelector('img');
+        if (img) img.remove();
+        avatarElement.style.background = 'var(--accent)';
+      }
+    }
+
+    function updateWaitingAvatarDisplay(avatarUrl, initials) {
+      const avatarElement = document.getElementById('waitingAvatar');
+      const initialsElement = document.getElementById('waitingAvatarInitials');
       
       if (avatarUrl) {
         // Remove initials text
