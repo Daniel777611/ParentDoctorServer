@@ -254,6 +254,32 @@ app.post(
   }
 );
 
+// ✅ Clear All Data (for testing/reset)
+app.delete("/api/admin/clear-all", async (req, res) => {
+  try {
+    // Delete all doctors
+    const result = await pool.query("DELETE FROM doctor");
+    const deletedCount = result.rowCount || 0;
+
+    // Also clear any other tables if they exist
+    try {
+      await pool.query("DELETE FROM health_tests");
+    } catch (err) {
+      // Table might not exist, ignore
+    }
+
+    console.log(`🗑️  Cleared all data: ${deletedCount} doctor(s) deleted`);
+    res.json({
+      success: true,
+      message: `All data cleared successfully. ${deletedCount} doctor(s) deleted.`,
+      deletedCount,
+    });
+  } catch (err) {
+    console.error("❌ Error clearing data:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ✅ Doctor Login / Status Check
 app.post("/api/doctors/login", async (req, res) => {
   try {
