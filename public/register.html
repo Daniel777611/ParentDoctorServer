@@ -327,7 +327,6 @@
     const emailLabel = document.getElementById("emailLabel");
     const verifyEmailLabel = document.getElementById("verifyEmail");
     const changeEmailBtn = document.getElementById("changeEmailBtn");
-    const changeEmailBtn2 = document.getElementById("changeEmailBtn2");
     const sendCodeBtn = document.getElementById("sendCodeBtn");
     const verifyBtn = document.getElementById("verifyBtn");
     const resendBtn = document.getElementById("resendBtn");
@@ -429,14 +428,39 @@
         setLoading(verifyBtn, false);
       }
     });
+    // Resend code link
+    resendBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      setLoading(resendBtn, true);
+      verifyMsg.textContent = "";
 
+      fetch("/api/verify/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: capturedEmail }),
+      })
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.success) {
+            verifyMsg.style.color = "green";
+            verifyMsg.textContent = "✅ New code sent! Check your email.";
+          } else {
+            verifyMsg.style.color = "red";
+            verifyMsg.textContent = "❌ " + (result.message || "Failed to resend.");
+          }
+        })
+        .catch((err) => {
+          verifyMsg.style.color = "red";
+          verifyMsg.textContent = "❌ Network error. Please try again.";
+        })
+        .finally(() => {
+          setLoading(resendBtn, false);
+        });
+    });
 
-    // Change email buttons
-    changeEmailBtn2.addEventListener("click", () => {
-      stepVerify.classList.remove("active");
-      stepEmail.classList.add("active");
-      emailVerified = false;
-      setTimeout(() => emailInput.focus(), 50);
+    // Third-party buttons in verify step
+    document.querySelectorAll("#stepVerify .quick-actions button").forEach((btn) => {
+      btn.addEventListener("click", () => alert("Coming soon"));
     });
 
     changeEmailBtn.addEventListener("click", () => {
