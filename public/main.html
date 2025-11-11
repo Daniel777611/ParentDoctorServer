@@ -43,9 +43,7 @@
       display: flex;
       flex-direction: column;
       background: var(--card);
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      border-right: 1px solid var(--border);
     }
     
     /* Waiting State - Video Call Area */
@@ -54,11 +52,12 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #f9f9f9;
+      background: var(--card);
       min-height: 300px;
+      border-bottom: 1px solid var(--border);
     }
     .video-call-area.connected {
-      background: #fff;
+      background: var(--card);
       min-height: auto;
     }
     .waiting-text {
@@ -128,8 +127,9 @@
       justify-content: center;
       gap: 12px;
       padding: 16px 20px;
-      background: #f9f9f9;
+      background: var(--card);
       border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
     }
     .audio-icon {
       font-size: 20px;
@@ -154,14 +154,19 @@
     .ai-sections {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      padding: 12px 20px 20px;
+      padding: 20px;
       border-top: 1px solid var(--border);
     }
     .ai-section {
-      background: #f9f9f9;
-      border-radius: 12px;
+      background: var(--card);
       padding: 16px;
+    }
+    .ai-section:first-child {
+      border-right: 1px solid var(--border);
+      padding-right: 20px;
+    }
+    .ai-section:last-child {
+      padding-left: 20px;
     }
     .ai-section h4 {
       font-size: 12px;
@@ -234,19 +239,15 @@
     .panel-right {
       display: flex;
       flex-direction: column;
-      gap: 20px;
       background: var(--card);
-      border-radius: 16px;
-      padding: 20px;
       overflow-y: auto;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
     
     /* AI Summary Report */
     .report-section {
-      background: #f9f9f9;
-      border-radius: 12px;
+      background: var(--card);
       padding: 20px;
+      border-bottom: 1px solid var(--border);
     }
     .report-section h4 {
       font-size: 12px;
@@ -287,8 +288,7 @@
     
     /* Chat History */
     .chat-section {
-      background: #f9f9f9;
-      border-radius: 12px;
+      background: var(--card);
       padding: 20px;
       flex: 1;
       overflow-y: auto;
