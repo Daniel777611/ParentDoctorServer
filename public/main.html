@@ -41,10 +41,18 @@
     
     /* Left Panel */
     .panel-left {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: auto var(--video-area-height, 1fr) 4px var(--ai-sections-height, auto);
       background: var(--card);
       border-right: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    /* Video Area Wrapper - contains video area and connected state elements */
+    .video-area-wrapper {
+      display: flex;
+      flex-direction: column;
       position: relative;
       overflow: hidden;
     }
@@ -100,13 +108,13 @@
     }
     /* Waiting State - Video Call Area */
     .video-call-area {
-      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       background: var(--card);
-      min-height: 300px;
-      border-bottom: 1px solid var(--border);
+      min-height: 200px;
+      position: relative;
+      overflow: hidden;
     }
     .video-call-area.connected {
       background: var(--card);
@@ -234,12 +242,40 @@
       color: var(--muted);
     }
     
+    /* Left Panel Vertical Resizer */
+    .resizer-left-vertical {
+      height: 4px;
+      background: var(--border);
+      cursor: row-resize;
+      position: relative;
+      z-index: 10;
+      transition: background 0.2s ease;
+      flex-shrink: 0;
+    }
+    .resizer-left-vertical:hover {
+      background: var(--accent);
+    }
+    .resizer-left-vertical.dragging {
+      background: var(--accent);
+    }
+    .resizer-left-vertical::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: -2px;
+      bottom: -2px;
+      cursor: row-resize;
+    }
+    
     /* AI Sections */
     .ai-sections {
       display: grid;
       grid-template-columns: 1fr 1fr;
       padding: 20px;
-      border-top: 1px solid var(--border);
+      min-height: 200px;
+      position: relative;
+      overflow-y: auto;
     }
     .ai-section {
       background: var(--card);
@@ -514,11 +550,16 @@
     
     /* State Management */
     .state-waiting .doctor-header,
-    .state-waiting .patient-image-container {
+    .state-waiting .patient-image-container,
+    .state-waiting .audio-controls {
       display: none;
     }
     .state-waiting .waiting-avatar-section {
       display: flex;
+    }
+    .state-waiting .video-call-area {
+      display: flex;
+      flex: 1;
     }
     .state-connected .waiting-text {
       display: none;
@@ -526,8 +567,12 @@
     .state-connected .waiting-avatar-section {
       display: none;
     }
-    .state-waiting .video-call-area {
-      flex: 0 0 auto;
+    .state-connected .video-call-area {
+      display: none;
+    }
+    .state-connected .video-area-wrapper {
+      display: flex;
+      flex-direction: column;
     }
     /* Hide center controls in waiting state */
     .state-waiting .panel-center {
@@ -558,38 +603,44 @@
         </div>
       </div>
       
-      <!-- Waiting State: Video Call Area -->
-      <div class="video-call-area waiting" id="videoCallArea">
-        <div class="waiting-text" id="waitingText">Waiting for video call</div>
-      </div>
-      
-      <!-- Connected State: Doctor Header -->
-      <div class="doctor-header" id="doctorHeader">
-        <div class="doctor-avatar" id="doctorAvatar">
-          <span id="avatarInitials">D</span>
-          <input type="file" id="avatarUploadInput" class="avatar-upload-input" accept="image/*" />
-          <div class="avatar-upload-btn" id="avatarUploadBtn" title="Upload photo">📷</div>
+      <!-- Video Area Wrapper -->
+      <div class="video-area-wrapper">
+        <!-- Waiting State: Video Call Area -->
+        <div class="video-call-area waiting" id="videoCallArea">
+          <div class="waiting-text" id="waitingText">Waiting for video call</div>
         </div>
-        <div class="doctor-info">
-          <div class="doctor-name" id="doctorName">Dr. Loading...</div>
-          <div class="doctor-status" id="doctorStatus">Connected</div>
+        
+        <!-- Connected State: Doctor Header -->
+        <div class="doctor-header" id="doctorHeader">
+          <div class="doctor-avatar" id="doctorAvatar">
+            <span id="avatarInitials">D</span>
+            <input type="file" id="avatarUploadInput" class="avatar-upload-input" accept="image/*" />
+            <div class="avatar-upload-btn" id="avatarUploadBtn" title="Upload photo">📷</div>
+          </div>
+          <div class="doctor-info">
+            <div class="doctor-name" id="doctorName">Dr. Loading...</div>
+            <div class="doctor-status" id="doctorStatus">Connected</div>
+          </div>
+        </div>
+        
+        <!-- Connected State: Patient Image -->
+        <div class="patient-image-container" id="patientImageContainer">
+          <img src="https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=500&h=400&fit=crop" 
+               alt="Patient" 
+               class="patient-image" 
+               id="patientImage">
+        </div>
+        
+        <!-- Audio Controls Bar -->
+        <div class="audio-controls">
+          <span class="audio-icon">👂</span>
+          <button class="language-btn" id="languageBtn">English</button>
+          <span class="speaker-icon">🔊</span>
         </div>
       </div>
       
-      <!-- Connected State: Patient Image -->
-      <div class="patient-image-container" id="patientImageContainer">
-        <img src="https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=500&h=400&fit=crop" 
-             alt="Patient" 
-             class="patient-image" 
-             id="patientImage">
-      </div>
-      
-      <!-- Audio Controls Bar -->
-      <div class="audio-controls">
-        <span class="audio-icon">👂</span>
-        <button class="language-btn" id="languageBtn">English</button>
-        <span class="speaker-icon">🔊</span>
-      </div>
+      <!-- Left Panel Vertical Resizer Handle -->
+      <div class="resizer-left-vertical" id="resizerLeftVertical"></div>
       
       <!-- AI Sections -->
       <div class="ai-sections">
@@ -808,6 +859,88 @@
       document.addEventListener('mousemove', resizeVertical);
       document.addEventListener('mouseup', stopResizeVertical);
       document.addEventListener('mouseleave', stopResizeVertical);
+    })();
+
+    // Resizable Left Panel Vertical (Video Area and AI Sections)
+    (function() {
+      const resizerLeftVertical = document.getElementById('resizerLeftVertical');
+      const leftPanel = document.querySelector('.panel-left');
+      let isResizing = false;
+      let startY = 0;
+      let startVideoHeight = 0;
+      let startAiHeight = 0;
+
+      // Load saved panel heights
+      const savedVideoHeight = localStorage.getItem('videoAreaHeight');
+      const savedAiHeight = localStorage.getItem('aiSectionsHeight');
+      if (savedVideoHeight && savedAiHeight) {
+        document.documentElement.style.setProperty('--video-area-height', savedVideoHeight);
+        document.documentElement.style.setProperty('--ai-sections-height', savedAiHeight);
+      }
+
+      function startResizeLeftVertical(e) {
+        isResizing = true;
+        resizerLeftVertical.classList.add('dragging');
+        startY = e.clientY;
+        
+        // Get current heights
+        const leftPanelRect = leftPanel.getBoundingClientRect();
+        const videoWrapper = document.querySelector('.video-area-wrapper');
+        const aiSections = document.querySelector('.ai-sections');
+        const videoRect = videoWrapper.getBoundingClientRect();
+        const aiRect = aiSections.getBoundingClientRect();
+        
+        startVideoHeight = videoRect.height;
+        startAiHeight = aiRect.height;
+        
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+      }
+
+      function resizeLeftVertical(e) {
+        if (!isResizing) return;
+        
+        const leftPanelRect = leftPanel.getBoundingClientRect();
+        const deltaY = e.clientY - startY;
+        // Subtract avatar section height and resizer height
+        const avatarSection = document.querySelector('.waiting-avatar-section');
+        const avatarHeight = avatarSection && avatarSection.offsetParent !== null ? avatarSection.offsetHeight : 0;
+        const panelHeight = leftPanelRect.height - avatarHeight - 4; // Subtract resizer height
+        
+        // Calculate new heights
+        const newVideoHeight = startVideoHeight + deltaY;
+        const newAiHeight = startAiHeight - deltaY;
+        
+        // Set minimum heights (20% of panel)
+        const minHeight = panelHeight * 0.2;
+        const maxHeight = panelHeight * 0.8;
+        
+        if (newVideoHeight >= minHeight && newVideoHeight <= maxHeight) {
+          const videoPercent = (newVideoHeight / panelHeight) * 100;
+          const aiPercent = (newAiHeight / panelHeight) * 100;
+          
+          document.documentElement.style.setProperty('--video-area-height', `${videoPercent}%`);
+          document.documentElement.style.setProperty('--ai-sections-height', `${aiPercent}%`);
+          
+          // Save to localStorage
+          localStorage.setItem('videoAreaHeight', `${videoPercent}%`);
+          localStorage.setItem('aiSectionsHeight', `${aiPercent}%`);
+        }
+      }
+
+      function stopResizeLeftVertical() {
+        if (!isResizing) return;
+        isResizing = false;
+        resizerLeftVertical.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+
+      resizerLeftVertical.addEventListener('mousedown', startResizeLeftVertical);
+      document.addEventListener('mousemove', resizeLeftVertical);
+      document.addEventListener('mouseup', stopResizeLeftVertical);
+      document.addEventListener('mouseleave', stopResizeLeftVertical);
     })();
 
     // Load doctor data
