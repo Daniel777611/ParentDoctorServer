@@ -737,17 +737,13 @@
       function startResize(e) {
         isResizing = true;
         resizer.classList.add('dragging');
-        startX = e.clientX;
         
-        // Get current widths
+        // Get container position
         const containerRect = container.getBoundingClientRect();
-        const leftPanel = document.querySelector('.panel-left');
-        const rightPanel = document.querySelector('.panel-right');
-        const leftRect = leftPanel.getBoundingClientRect();
-        const rightRect = rightPanel.getBoundingClientRect();
         
-        startLeftWidth = leftRect.width;
-        startRightWidth = rightRect.width;
+        // Store initial resizer position relative to container
+        const resizerRect = resizer.getBoundingClientRect();
+        startX = resizerRect.left + resizerRect.width / 2 - containerRect.left;
         
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
@@ -758,23 +754,26 @@
         if (!isResizing) return;
         
         const containerRect = container.getBoundingClientRect();
-        const deltaX = e.clientX - startX;
         // Check if center panel is visible
         const centerPanel = document.querySelector('.panel-center');
         const centerPanelWidth = centerPanel && centerPanel.offsetParent !== null ? 80 : 0;
-        const containerWidth = containerRect.width - centerPanelWidth - 4; // Subtract center panel and resizer width
+        const resizerWidth = 4;
+        const availableWidth = containerRect.width - centerPanelWidth - resizerWidth;
         
-        // Calculate new widths
-        const newLeftWidth = startLeftWidth + deltaX;
-        const newRightWidth = startRightWidth - deltaX;
+        // Calculate mouse position relative to container
+        const mouseX = e.clientX - containerRect.left;
         
-        // Set minimum widths (20% of container)
-        const minWidth = containerWidth * 0.2;
-        const maxWidth = containerWidth * 0.8;
+        // Calculate new left width based on mouse position
+        const newLeftWidth = mouseX;
+        const newRightWidth = availableWidth - newLeftWidth;
+        
+        // Set minimum widths (20% of available width)
+        const minWidth = availableWidth * 0.2;
+        const maxWidth = availableWidth * 0.8;
         
         if (newLeftWidth >= minWidth && newLeftWidth <= maxWidth) {
-          const leftPercent = (newLeftWidth / containerWidth) * 100;
-          const rightPercent = (newRightWidth / containerWidth) * 100;
+          const leftPercent = (newLeftWidth / availableWidth) * 100;
+          const rightPercent = (newRightWidth / availableWidth) * 100;
           
           document.documentElement.style.setProperty('--left-panel-width', `${leftPercent}%`);
           document.documentElement.style.setProperty('--right-panel-width', `${rightPercent}%`);
@@ -819,17 +818,13 @@
       function startResizeVertical(e) {
         isResizing = true;
         resizerVertical.classList.add('dragging');
-        startY = e.clientY;
         
-        // Get current heights
+        // Get panel position
         const rightPanelRect = rightPanel.getBoundingClientRect();
-        const reportSection = document.querySelector('.report-section');
-        const chatSection = document.querySelector('.chat-section');
-        const reportRect = reportSection.getBoundingClientRect();
-        const chatRect = chatSection.getBoundingClientRect();
         
-        startReportHeight = reportRect.height;
-        startChatHeight = chatRect.height;
+        // Store initial resizer position relative to panel
+        const resizerRect = resizerVertical.getBoundingClientRect();
+        startY = resizerRect.top + resizerRect.height / 2 - rightPanelRect.top;
         
         document.body.style.cursor = 'row-resize';
         document.body.style.userSelect = 'none';
@@ -840,20 +835,23 @@
         if (!isResizing) return;
         
         const rightPanelRect = rightPanel.getBoundingClientRect();
-        const deltaY = e.clientY - startY;
-        const panelHeight = rightPanelRect.height - 4; // Subtract resizer height
+        const resizerHeight = 4;
+        const availableHeight = rightPanelRect.height - resizerHeight;
         
-        // Calculate new heights
-        const newReportHeight = startReportHeight + deltaY;
-        const newChatHeight = startChatHeight - deltaY;
+        // Calculate mouse position relative to panel
+        const mouseY = e.clientY - rightPanelRect.top;
         
-        // Set minimum heights (20% of panel)
-        const minHeight = panelHeight * 0.2;
-        const maxHeight = panelHeight * 0.8;
+        // Calculate new report height based on mouse position
+        const newReportHeight = mouseY;
+        const newChatHeight = availableHeight - newReportHeight;
+        
+        // Set minimum heights (20% of available height)
+        const minHeight = availableHeight * 0.2;
+        const maxHeight = availableHeight * 0.8;
         
         if (newReportHeight >= minHeight && newReportHeight <= maxHeight) {
-          const reportPercent = (newReportHeight / panelHeight) * 100;
-          const chatPercent = (newChatHeight / panelHeight) * 100;
+          const reportPercent = (newReportHeight / availableHeight) * 100;
+          const chatPercent = (newChatHeight / availableHeight) * 100;
           
           document.documentElement.style.setProperty('--report-section-height', `${reportPercent}%`);
           document.documentElement.style.setProperty('--chat-section-height', `${chatPercent}%`);
@@ -898,17 +896,13 @@
       function startResizeLeftVertical(e) {
         isResizing = true;
         resizerLeftVertical.classList.add('dragging');
-        startY = e.clientY;
         
-        // Get current heights
+        // Get panel position
         const leftPanelRect = leftPanel.getBoundingClientRect();
-        const videoWrapper = document.querySelector('.video-area-wrapper');
-        const aiSections = document.querySelector('.ai-sections');
-        const videoRect = videoWrapper.getBoundingClientRect();
-        const aiRect = aiSections.getBoundingClientRect();
         
-        startVideoHeight = videoRect.height;
-        startAiHeight = aiRect.height;
+        // Store initial resizer position relative to panel
+        const resizerRect = resizerLeftVertical.getBoundingClientRect();
+        startY = resizerRect.top + resizerRect.height / 2 - leftPanelRect.top;
         
         document.body.style.cursor = 'row-resize';
         document.body.style.userSelect = 'none';
@@ -919,23 +913,25 @@
         if (!isResizing) return;
         
         const leftPanelRect = leftPanel.getBoundingClientRect();
-        const deltaY = e.clientY - startY;
-        // Subtract avatar section height and resizer height
         const avatarSection = document.querySelector('.waiting-avatar-section');
         const avatarHeight = avatarSection && avatarSection.offsetParent !== null ? avatarSection.offsetHeight : 0;
-        const panelHeight = leftPanelRect.height - avatarHeight - 4; // Subtract resizer height
         
-        // Calculate new heights
-        const newVideoHeight = startVideoHeight + deltaY;
-        const newAiHeight = startAiHeight - deltaY;
+        // Calculate mouse position relative to panel
+        const mouseY = e.clientY - leftPanelRect.top;
+        const resizerHeight = 4;
+        const availableHeight = leftPanelRect.height - avatarHeight - resizerHeight;
         
-        // Set minimum heights (20% of panel)
-        const minHeight = panelHeight * 0.2;
-        const maxHeight = panelHeight * 0.8;
+        // Calculate new video height based on mouse position
+        const newVideoHeight = mouseY - avatarHeight;
+        const newAiHeight = availableHeight - newVideoHeight;
+        
+        // Set minimum heights (20% of available height)
+        const minHeight = availableHeight * 0.2;
+        const maxHeight = availableHeight * 0.8;
         
         if (newVideoHeight >= minHeight && newVideoHeight <= maxHeight) {
-          const videoPercent = (newVideoHeight / panelHeight) * 100;
-          const aiPercent = (newAiHeight / panelHeight) * 100;
+          const videoPercent = (newVideoHeight / availableHeight) * 100;
+          const aiPercent = (newAiHeight / availableHeight) * 100;
           
           document.documentElement.style.setProperty('--video-area-height', `${videoPercent}%`);
           document.documentElement.style.setProperty('--ai-sections-height', `${aiPercent}%`);
