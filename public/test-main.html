@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Main Interface | ParentDoctor</title>
+  <style>
+    body {
+      font-family: "Inter", "Segoe UI", sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin: 0 0 20px;
+      font-size: 24px;
+    }
+    .info {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #222;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    .btn:hover {
+      background: #000;
+    }
+    .btn.secondary {
+      background: #666;
+    }
+    .btn.secondary:hover {
+      background: #555;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .status.success {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+    .status.error {
+      background: #fee2e2;
+      color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>测试主界面入口</h1>
+    
+    <div class="info">
+      <strong>说明：</strong><br>
+      这个页面用于测试主界面。点击下面的按钮可以：
+      <ul style="margin: 10px 0 0 20px; padding: 0;">
+        <li>设置测试医生数据并进入主界面</li>
+        <li>清除登录状态</li>
+        <li>查看当前登录状态</li>
+      </ul>
+    </div>
+
+    <div>
+      <button class="btn" onclick="setTestDoctor()">设置测试医生并进入主界面</button>
+      <button class="btn secondary" onclick="clearLogin()">清除登录状态</button>
+      <button class="btn secondary" onclick="checkStatus()">检查登录状态</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <script>
+    function setTestDoctor() {
+      // 设置测试医生数据
+      const testDoctor = {
+        doctor_id: 'TEST001',
+        first_name: 'Dee',
+        last_name: 'Victor',
+        email: 'test@example.com',
+        ai_review_status: 'approved'
+      };
+      
+      sessionStorage.setItem('doctorLoggedIn', 'true');
+      sessionStorage.setItem('doctorData', JSON.stringify(testDoctor));
+      
+      showStatus('✅ 测试医生数据已设置！正在跳转到主界面...', 'success');
+      
+      setTimeout(() => {
+        window.location.href = '/main.html';
+      }, 1000);
+    }
+
+    function clearLogin() {
+      sessionStorage.removeItem('doctorLoggedIn');
+      sessionStorage.removeItem('doctorData');
+      showStatus('✅ 登录状态已清除', 'success');
+    }
+
+    function checkStatus() {
+      const isLoggedIn = sessionStorage.getItem('doctorLoggedIn');
+      const doctorData = sessionStorage.getItem('doctorData');
+      
+      if (isLoggedIn && doctorData) {
+        try {
+          const doctor = JSON.parse(doctorData);
+          showStatus(
+            `✅ 已登录<br>医生: Dr. ${doctor.first_name} ${doctor.last_name}<br>邮箱: ${doctor.email}<br>状态: ${doctor.ai_review_status}`,
+            'success'
+          );
+        } catch (e) {
+          showStatus('⚠️ 登录状态存在但数据格式错误', 'error');
+        }
+      } else {
+        showStatus('❌ 未登录', 'error');
+      }
+    }
+
+    function showStatus(message, type) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.className = `status ${type}`;
+      statusDiv.innerHTML = message;
+    }
+
+    // 页面加载时自动检查状态
+    window.onload = function() {
+      checkStatus();
+    };
+  </script>
+</body>
+</html>
+
