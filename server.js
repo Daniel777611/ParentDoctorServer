@@ -295,7 +295,7 @@ app.post("/api/admin/login", async (req, res) => {
   try {
     const password = req.body?.password || "";
     // Simple password check (you can set this via environment variable)
-    const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+    const adminPassword = process.env.ADMIN_PASSWORD || "777777";
     
     if (password === adminPassword) {
       res.json({ success: true, message: "Login successful" });
