@@ -11,9 +11,29 @@ const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const { runAIReview } = require("./aiReview");
+const { sendVerificationCode } = require("./notification");
 
 
 const app = express();
+
+// ✅ Email Verification Code Storage (in-memory, expires after 10 minutes)
+const verificationCodes = new Map(); // email -> { code, expiresAt }
+
+function generateVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
+}
+
+function cleanupExpiredCodes() {
+  const now = Date.now();
+  for (const [email, data] of verificationCodes.entries()) {
+    if (data.expiresAt < now) {
+      verificationCodes.delete(email);
+    }
+  }
+}
+
+// Clean up expired codes every 5 minutes
+setInterval(cleanupExpiredCodes, 5 * 60 * 1000);
 const upload = multer({ storage: multer.memoryStorage() }); // ✅ Store files in memory (Render doesn't need local write)
 
 // ✅ Cloudflare R2 Client
@@ -92,6 +112,74 @@ app.get("/api/doctors", async (_req, res) => {
   }
 });
 
+// ✅ Send Email Verification Code
+app.post("/api/verify/send-code", async (req, res) => {
+  try {
+    const email = (req.body?.email || "").trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    // Check if email already registered
+    const { rows } = await pool.query("SELECT email FROM doctor WHERE lower(email) = $1 LIMIT 1", [email]);
+    if (rows.length > 0) {
+      return res.status(400).json({ success: false, message: "This email is already registered." });
+    }
+
+    // Generate 6-digit code
+    const code = generateVerificationCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    // Store code
+    verificationCodes.set(email, { code, expiresAt });
+
+    // Send email
+    const sent = await sendVerificationCode(email, code);
+    if (!sent) {
+      return res.status(500).json({ success: false, message: "Failed to send verification code. Please try again." });
+    }
+
+    res.json({ success: true, message: "Verification code sent to your email." });
+  } catch (err) {
+    console.error("❌ Error sending verification code:", err.message);
+    res.status(500).json({ success: false, error: "Failed to send verification code." });
+  }
+});
+
+// ✅ Verify Email Code
+app.post("/api/verify/check-code", async (req, res) => {
+  try {
+    const email = (req.body?.email || "").trim().toLowerCase();
+    const code = (req.body?.code || "").trim();
+
+    if (!email || !code) {
+      return res.status(400).json({ success: false, message: "Email and code are required." });
+    }
+
+    const stored = verificationCodes.get(email);
+    if (!stored) {
+      return res.status(400).json({ success: false, message: "Verification code not found or expired. Please request a new code." });
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      verificationCodes.delete(email);
+      return res.status(400).json({ success: false, message: "Verification code has expired. Please request a new code." });
+    }
+
+    if (stored.code !== code) {
+      return res.status(400).json({ success: false, message: "Invalid verification code. Please try again." });
+    }
+
+    // Code is valid, mark email as verified (store in verificationCodes with verified flag)
+    verificationCodes.set(email, { ...stored, verified: true });
+
+    res.json({ success: true, message: "Email verified successfully." });
+  } catch (err) {
+    console.error("❌ Error verifying code:", err.message);
+    res.status(500).json({ success: false, error: "Failed to verify code." });
+  }
+});
+
 // ✅ Upload File to Cloudflare R2
 async function uploadToR2(file, doctorId, category) {
   if (!file) return null;
@@ -130,6 +218,19 @@ app.post(
         return res.status(400).json({ success: false, message: "Missing required fields" });
       }
 
+      // Check if email is verified
+      const emailLower = (email || "").trim().toLowerCase();
+      const stored = verificationCodes.get(emailLower);
+      if (!stored || !stored.verified) {
+        return res.status(400).json({ success: false, message: "Email not verified. Please verify your email first." });
+      }
+
+      // Check if email already registered
+      const { rows: existing } = await pool.query("SELECT email FROM doctor WHERE lower(email) = $1 LIMIT 1", [emailLower]);
+      if (existing.length > 0) {
+        return res.status(400).json({ success: false, message: "This email is already registered." });
+      }
+
       // Generate unique doctor_id
       const doctor_id = "doc_" + uuidv4().split("-")[0];
 
@@ -148,9 +249,10 @@ app.post(
       );
 
       // ✅ Call AI Review Module (synchronous execution)
-        await runAIReview(result.rows[0]);
+      await runAIReview(result.rows[0]);
 
-
+      // Clear verification code after successful registration
+      verificationCodes.delete(emailLower);
 
       res.status(201).json({
         success: true,

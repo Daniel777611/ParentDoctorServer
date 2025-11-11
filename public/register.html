@@ -216,7 +216,7 @@
     <form id="emailForm">
       <label for="email">Enter your Email</label>
       <input type="email" id="email" required placeholder="name@example.com" autocomplete="email" />
-      <button id="continueBtn" class="btn primary" type="submit">Continue</button>
+      <button id="sendCodeBtn" class="btn primary" type="submit">Continue</button>
 
       <div class="divider">OR</div>
       <div class="quick-actions">
@@ -226,6 +226,20 @@
       </div>
     </form>
     <p class="note">Third-party sign up coming soon.</p>
+    <div class="msg" id="emailMsg"></div>
+  </div>
+
+  <div id="stepVerify" class="card">
+    <h2>Verify your Email</h2>
+    <p class="caption">Enter the verification code we just sent to <strong id="verifyEmail"></strong></p>
+    <form id="verifyForm">
+      <label for="code">Verification Code</label>
+      <input type="text" id="code" required placeholder="000000" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" style="text-align:center;font-size:20px;letter-spacing:4px;font-family:monospace;" />
+      <button id="verifyBtn" class="btn primary" type="submit">Continue</button>
+      <button type="button" id="resendBtn" class="btn secondary">Resend Code</button>
+      <button type="button" id="changeEmailBtn2" class="btn secondary" style="margin-top:8px;">Change Email</button>
+    </form>
+    <div class="msg" id="verifyMsg"></div>
   </div>
 
   <div id="stepForm" class="card">
@@ -282,46 +296,175 @@
 
   <script>
     const stepEmail = document.getElementById("stepEmail");
+    const stepVerify = document.getElementById("stepVerify");
     const stepForm = document.getElementById("stepForm");
     const emailForm = document.getElementById("emailForm");
+    const verifyForm = document.getElementById("verifyForm");
     const doctorForm = document.getElementById("doctorForm");
     const emailInput = document.getElementById("email");
+    const codeInput = document.getElementById("code");
     const emailHidden = document.getElementById("email_hidden");
     const emailLabel = document.getElementById("emailLabel");
+    const verifyEmailLabel = document.getElementById("verifyEmail");
     const changeEmailBtn = document.getElementById("changeEmailBtn");
+    const changeEmailBtn2 = document.getElementById("changeEmailBtn2");
+    const sendCodeBtn = document.getElementById("sendCodeBtn");
+    const verifyBtn = document.getElementById("verifyBtn");
+    const resendBtn = document.getElementById("resendBtn");
+    const emailMsg = document.getElementById("emailMsg");
+    const verifyMsg = document.getElementById("verifyMsg");
     const msg = document.getElementById("msg");
 
     let capturedEmail = "";
+    let emailVerified = false;
 
     const quickActionButtons = document.querySelectorAll(".quick-actions button");
     quickActionButtons.forEach((btn) => {
       btn.addEventListener("click", () => alert("Coming soon"));
     });
 
-    emailForm.addEventListener("submit", (e) => {
+    // Step 1: Send verification code
+    emailForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const value = emailInput.value.trim();
+      const value = emailInput.value.trim().toLowerCase();
       if (!validateEmail(value)) {
         emailInput.focus();
         emailInput.setCustomValidity("Please enter a valid email address");
         emailInput.reportValidity();
         return;
       }
-      capturedEmail = value;
-      emailHidden.value = capturedEmail;
-      emailLabel.textContent = capturedEmail;
-      stepEmail.classList.remove("active");
-      stepForm.classList.add("active");
+
+      setLoading(sendCodeBtn, true);
+      emailMsg.textContent = "";
+      emailMsg.style.color = "#555";
+
+      try {
+        const res = await fetch("/api/verify/send-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: value }),
+        });
+
+        const result = await res.json();
+        if (result.success) {
+          capturedEmail = value;
+          verifyEmailLabel.textContent = value;
+          emailMsg.style.color = "green";
+          emailMsg.textContent = "✅ Verification code sent! Check your email.";
+          stepEmail.classList.remove("active");
+          stepVerify.classList.add("active");
+          setTimeout(() => codeInput.focus(), 100);
+        } else {
+          emailMsg.style.color = "red";
+          emailMsg.textContent = "❌ " + (result.message || "Failed to send code.");
+        }
+      } catch (err) {
+        emailMsg.style.color = "red";
+        emailMsg.textContent = "❌ Network error. Please try again.";
+      } finally {
+        setLoading(sendCodeBtn, false);
+      }
+    });
+
+    // Step 2: Verify code
+    verifyForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const code = codeInput.value.trim();
+      if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+        codeInput.focus();
+        codeInput.setCustomValidity("Please enter a 6-digit code");
+        codeInput.reportValidity();
+        return;
+      }
+
+      setLoading(verifyBtn, true);
+      verifyMsg.textContent = "";
+
+      try {
+        const res = await fetch("/api/verify/check-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: capturedEmail, code }),
+        });
+
+        const result = await res.json();
+        if (result.success) {
+          emailVerified = true;
+          emailHidden.value = capturedEmail;
+          emailLabel.textContent = capturedEmail;
+          verifyMsg.style.color = "green";
+          verifyMsg.textContent = "✅ Email verified!";
+          stepVerify.classList.remove("active");
+          stepForm.classList.add("active");
+        } else {
+          verifyMsg.style.color = "red";
+          verifyMsg.textContent = "❌ " + (result.message || "Invalid code.");
+          codeInput.value = "";
+          codeInput.focus();
+        }
+      } catch (err) {
+        verifyMsg.style.color = "red";
+        verifyMsg.textContent = "❌ Network error. Please try again.";
+      } finally {
+        setLoading(verifyBtn, false);
+      }
+    });
+
+    // Resend code
+    resendBtn.addEventListener("click", async () => {
+      setLoading(resendBtn, true);
+      verifyMsg.textContent = "";
+
+      try {
+        const res = await fetch("/api/verify/send-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: capturedEmail }),
+        });
+
+        const result = await res.json();
+        if (result.success) {
+          verifyMsg.style.color = "green";
+          verifyMsg.textContent = "✅ New code sent! Check your email.";
+        } else {
+          verifyMsg.style.color = "red";
+          verifyMsg.textContent = "❌ " + (result.message || "Failed to resend.");
+        }
+      } catch (err) {
+        verifyMsg.style.color = "red";
+        verifyMsg.textContent = "❌ Network error. Please try again.";
+      } finally {
+        setLoading(resendBtn, false);
+      }
+    });
+
+    // Change email buttons
+    changeEmailBtn2.addEventListener("click", () => {
+      stepVerify.classList.remove("active");
+      stepEmail.classList.add("active");
+      emailVerified = false;
+      setTimeout(() => emailInput.focus(), 50);
     });
 
     changeEmailBtn.addEventListener("click", () => {
-      stepForm.classList.remove("active");
-      stepEmail.classList.add("active");
+      if (!emailVerified) {
+        stepForm.classList.remove("active");
+        stepEmail.classList.add("active");
+      } else {
+        stepForm.classList.remove("active");
+        stepVerify.classList.add("active");
+      }
       setTimeout(() => emailInput.focus(), 50);
     });
 
     doctorForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (!emailVerified) {
+        msg.style.color = "red";
+        msg.textContent = "❌ Please verify your email first.";
+        return;
+      }
+
       msg.textContent = "Submitting...";
       msg.style.color = "#555";
 
@@ -354,6 +497,16 @@
         msg.textContent = "❌ Network error. Please try again.";
       }
     });
+
+    function setLoading(btn, isLoading) {
+      btn.disabled = isLoading;
+      if (isLoading) {
+        btn.dataset.originalText = btn.textContent;
+        btn.textContent = "Loading...";
+      } else {
+        btn.textContent = btn.dataset.originalText || "Continue";
+      }
+    }
 
     document.getElementById("id_upload").addEventListener("change", (e) => {
       showPreview(e.target, "id_preview");

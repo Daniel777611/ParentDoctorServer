@@ -220,9 +220,94 @@ async function sendReviewNotification(doctor, status, notes) {
   return result;
 }
 
+/**
+ * Send email verification code
+ * @param {string} email - Email address to send code to
+ * @param {string} code - 6-digit verification code
+ * @returns {Promise<boolean>} Whether sending was successful
+ */
+async function sendVerificationCode(email, code) {
+  if (!mailTransporter) {
+    console.log("⚠️  Email service not configured, skipping verification code email");
+    return false;
+  }
+  if (!email || email.trim() === "") {
+    console.log("⚠️  Email is empty, skipping verification code email");
+    return false;
+  }
+
+  try {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #222; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+          .code-box { background: #fff; border: 2px dashed #222; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0; }
+          .code { font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #222; font-family: monospace; }
+          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>ParentDoctor Email Verification</h1>
+          </div>
+          <div class="content">
+            <p>Hello,</p>
+            <p>Thank you for registering with ParentDoctor. Please use the verification code below to complete your registration:</p>
+            <div class="code-box">
+              <div class="code">${code}</div>
+            </div>
+            <p>This code will expire in 10 minutes.</p>
+            <p>If you didn't request this code, please ignore this email.</p>
+            <div class="footer">
+              <p>This email is automatically sent by ParentDoctor system. Please do not reply.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const textContent = `
+Hello,
+
+Thank you for registering with ParentDoctor. Please use the verification code below to complete your registration:
+
+${code}
+
+This code will expire in 10 minutes.
+
+If you didn't request this code, please ignore this email.
+
+This email is automatically sent by ParentDoctor system. Please do not reply.
+    `;
+
+    const info = await mailTransporter.sendMail({
+      from: `"ParentDoctor" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to: email,
+      subject: "ParentDoctor Email Verification Code",
+      text: textContent,
+      html: htmlContent,
+    });
+
+    console.log(`✅ Verification code sent to ${email}: ${info.messageId}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Failed to send verification code to ${email}:`, error.message);
+    return false;
+  }
+}
+
 module.exports = {
   sendEmailNotification,
   sendSMSNotification,
   sendReviewNotification,
+  sendVerificationCode,
 };
 
