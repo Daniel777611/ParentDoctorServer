@@ -278,6 +278,67 @@ app.post(
   }
 );
 
+// ✅ Admin Login
+app.post("/api/admin/login", async (req, res) => {
+  try {
+    const password = req.body?.password || "";
+    // Simple password check (you can set this via environment variable)
+    const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+    
+    if (password === adminPassword) {
+      res.json({ success: true, message: "Login successful" });
+    } else {
+      res.status(401).json({ success: false, message: "Invalid password" });
+    }
+  } catch (err) {
+    console.error("❌ Admin login error:", err.message);
+    res.status(500).json({ success: false, error: "Login failed" });
+  }
+});
+
+// ✅ Delete Single Doctor
+app.delete("/api/admin/doctors/:doctorId", async (req, res) => {
+  try {
+    const doctorId = req.params.doctorId;
+
+    // Get doctor data to extract file URLs
+    const { rows } = await pool.query(
+      "SELECT id_card, medical_license FROM doctor WHERE doctor_id = $1",
+      [doctorId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Doctor not found" });
+    }
+
+    const doctor = rows[0];
+    let deletedFiles = 0;
+
+    // Delete files from R2
+    if (doctor.id_card) {
+      const deleted = await deleteFromR2(doctor.id_card);
+      if (deleted) deletedFiles++;
+    }
+    if (doctor.medical_license) {
+      const deleted = await deleteFromR2(doctor.medical_license);
+      if (deleted) deletedFiles++;
+    }
+
+    // Delete from database
+    const deleteResult = await pool.query("DELETE FROM doctor WHERE doctor_id = $1", [doctorId]);
+
+    console.log(`🗑️  Deleted doctor ${doctorId}: ${deletedFiles} file(s) deleted from R2`);
+    res.json({
+      success: true,
+      message: `Doctor deleted successfully. ${deletedFiles} file(s) deleted from R2.`,
+      deletedFiles,
+    });
+  } catch (err) {
+    console.error("❌ Error deleting doctor:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ✅ Clear All Data (for testing/reset)
 app.delete("/api/admin/clear-all", async (req, res) => {
   try {
