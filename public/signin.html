@@ -243,7 +243,20 @@
         }
 
         const data = await res.json();
-        paintStatus(data.doctor);
+        const doctor = data.doctor;
+        const status = (doctor.ai_review_status || "pending").toLowerCase();
+
+        // Only allow approved doctors to login
+        if (status === "approved") {
+          // Store doctor info in sessionStorage
+          sessionStorage.setItem("doctorLoggedIn", "true");
+          sessionStorage.setItem("doctorData", JSON.stringify(doctor));
+          // Redirect to main interface
+          window.location.href = "/main.html";
+        } else {
+          // Show status for non-approved doctors
+          paintStatus(doctor);
+        }
       } catch (err) {
         errorMessage.textContent = "Something went wrong. Please try again.";
       } finally {
@@ -261,7 +274,7 @@
         rejected: {
           badge: "Not Approved",
           color: "#ef4444",
-          message: "We’re sorry, your registration was not approved.",
+          message: "We're sorry, your registration was not approved.",
         },
         pending: {
           badge: "Pending Review",

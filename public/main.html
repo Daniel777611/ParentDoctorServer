@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ParentDoctor - Main Interface</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --card: #fff;
+      --border: #e5e5e5;
+      --text: #222;
+      --muted: #666;
+      --accent: #222;
+      --success: #16a34a;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .doctor-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .doctor-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+    .doctor-name {
+      font-weight: 500;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #dcfce7;
+      color: var(--success);
+    }
+    .status-badge::before {
+      content: "●";
+      font-size: 8px;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 60px 1fr;
+      gap: 24px;
+      padding: 24px;
+      max-width: 1600px;
+      margin: 0 auto;
+      height: calc(100vh - 73px);
+    }
+    .panel {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 24px;
+      overflow-y: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .panel-left {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .panel-right {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .panel-center {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+    }
+    .doctor-card {
+      background: #f9f9f9;
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .doctor-card-avatar {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .doctor-card-info h3 {
+      margin: 0 0 4px;
+      font-size: 18px;
+    }
+    .patient-image {
+      width: 100%;
+      border-radius: 12px;
+      object-fit: cover;
+      max-height: 400px;
+      background: #f0f0f0;
+    }
+    .ai-section {
+      background: #f9f9f9;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .ai-section h4 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .ai-section p {
+      margin: 0 0 8px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .ai-section ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .ai-section li {
+      margin: 4px 0;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .control-btn {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      transition: transform 0.2s ease;
+    }
+    .control-btn:hover {
+      transform: scale(1.1);
+    }
+    .control-btn.video {
+      background: var(--accent);
+      color: #fff;
+    }
+    .control-btn.mic {
+      background: var(--accent);
+      color: #fff;
+    }
+    .control-btn.hangup {
+      background: #ef4444;
+      color: #fff;
+    }
+    .report-section {
+      background: #f9f9f9;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .report-section h4 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .chat-section {
+      background: #f9f9f9;
+      border-radius: 12px;
+      padding: 16px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .chat-message {
+      margin-bottom: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .chat-message.patient {
+      background: #e5e5e5;
+    }
+    .chat-message.ai {
+      background: #fff;
+      border: 1px solid var(--border);
+    }
+    .chat-message.doctor {
+      background: #dcfce7;
+      border-left: 3px solid var(--success);
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .btn:hover {
+      background: #f3f3f3;
+    }
+    .language-selector {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .language-selector select {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ParentDoctor</h1>
+    <div class="header-actions">
+      <div class="doctor-info">
+        <div class="doctor-avatar" id="doctorAvatar">D</div>
+        <div>
+          <div class="doctor-name" id="doctorName">Dr. Loading...</div>
+          <div class="status-badge">Connected</div>
+        </div>
+      </div>
+      <button class="btn" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Left Panel -->
+    <div class="panel panel-left">
+      <div class="doctor-card">
+        <div class="doctor-card-avatar" id="doctorCardAvatar">D</div>
+        <div class="doctor-card-info">
+          <h3 id="doctorCardName">Dr. Loading...</h3>
+          <div class="status-badge">Available</div>
+        </div>
+      </div>
+
+      <div>
+        <img id="patientImage" class="patient-image" src="https://via.placeholder.com/400x300?text=Patient+Image" alt="Patient Image">
+      </div>
+
+      <div class="language-selector">
+        <span>🔊</span>
+        <select id="languageSelect">
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+        </select>
+      </div>
+
+      <div class="ai-section">
+        <h4>AI Real-time Interpreter</h4>
+        <p id="interpreterText">Waiting for patient input...</p>
+      </div>
+
+      <div class="ai-section">
+        <h4>AI Symptom Summary</h4>
+        <ul id="symptomList">
+          <li>No symptoms reported yet</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Center Controls -->
+    <div class="panel-center">
+      <button class="control-btn video" id="videoBtn" title="Toggle Video">📹</button>
+      <button class="control-btn mic" id="micBtn" title="Toggle Microphone">🎤</button>
+      <button class="control-btn hangup" id="hangupBtn" title="End Call">✕</button>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="panel panel-right">
+      <div class="report-section">
+        <h4>AI Summary Report</h4>
+        <div id="summaryReport">
+          <p><strong>Patient:</strong> <span id="reportPatient">-</span></p>
+          <p><strong>Reported Symptoms:</strong></p>
+          <ul id="reportSymptoms">
+            <li>No symptoms yet</li>
+          </ul>
+          <p><strong>Parent's Concern:</strong></p>
+          <p id="reportConcern">-</p>
+          <p><strong>AI Summary:</strong></p>
+          <p id="reportSummary">-</p>
+          <p style="font-size: 12px; color: var(--muted); margin-top: 12px;">(Auto-generated from AI-Patient conversation)</p>
+        </div>
+      </div>
+
+      <div class="chat-section">
+        <h4 style="margin: 0 0 16px;">AI-Patient Chat History</h4>
+        <div id="chatHistory">
+          <div class="chat-message patient">
+            <strong>Patient:</strong> My child has a fever of 38 degrees Celsius and a cough. What could be the cause, and what should I do?
+          </div>
+          <div class="chat-message ai">
+            <strong>AI:</strong> Your child's symptoms suggest a mild viral infection — common and usually not serious.
+            <br><br>
+            <strong>What You Can Do:</strong>
+            <ul style="margin: 8px 0; padding-left: 20px;">
+              <li>Keep them rested and hydrated.</li>
+              <li>Monitor their temperature and cough.</li>
+              <li>If the fever rises or symptoms worsen, seek medical attention.</li>
+            </ul>
+          </div>
+          <div class="chat-message doctor">
+            <strong>Doctor Available</strong> 👨‍⚕️ Dr. <span id="chatDoctorName">Loading...</span>, our pediatrician, is available now for an online consultation. Would you like me to connect you?
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Check if doctor is logged in
+    if (!sessionStorage.getItem('doctorLoggedIn')) {
+      window.location.href = '/signin.html';
+    }
+
+    // Load doctor data
+    const doctorData = JSON.parse(sessionStorage.getItem('doctorData') || '{}');
+    const doctorName = `${doctorData.first_name || ''} ${doctorData.last_name || ''}`.trim() || 'Doctor';
+    const initials = (doctorData.first_name?.[0] || '') + (doctorData.last_name?.[0] || '') || 'D';
+
+    // Update UI with doctor info
+    document.getElementById('doctorName').textContent = `Dr. ${doctorName}`;
+    document.getElementById('doctorCardName').textContent = `Dr. ${doctorName}`;
+    document.getElementById('chatDoctorName').textContent = doctorName;
+    document.getElementById('doctorAvatar').textContent = initials;
+    document.getElementById('doctorCardAvatar').textContent = initials;
+
+    // Control buttons
+    document.getElementById('videoBtn').addEventListener('click', () => {
+      alert('Video toggle - Coming soon');
+    });
+
+    document.getElementById('micBtn').addEventListener('click', () => {
+      alert('Microphone toggle - Coming soon');
+    });
+
+    document.getElementById('hangupBtn').addEventListener('click', () => {
+      if (confirm('End the consultation?')) {
+        logout();
+      }
+    });
+
+    function logout() {
+      sessionStorage.removeItem('doctorLoggedIn');
+      sessionStorage.removeItem('doctorData');
+      window.location.href = '/signin.html';
+    }
+
+    // Language selector
+    document.getElementById('languageSelect').addEventListener('change', (e) => {
+      console.log('Language changed to:', e.target.value);
+      // Language change logic can be added here
+    });
+
+    // Placeholder for future AI integration
+    // This will be connected to WebSocket or API for real-time updates
+  </script>
+</body>
+</html>
+
