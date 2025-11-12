@@ -281,20 +281,14 @@
       <div class="stat-card">
         <div class="label">家庭总数</div>
         <div class="value" id="statFamilies">0</div>
-        <div class="subtitle" id="statFamiliesSub">已注册: 0</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">孩子总数</div>
-        <div class="value" id="statChildren">0</div>
-        <div class="subtitle" id="statChildrenSub">已记录: 0</div>
+        <div class="subtitle" id="statFamiliesSub">孩子总数: 0</div>
       </div>
     </div>
 
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab active" onclick="switchTab('doctors')">👨‍⚕️ 医生</button>
-      <button class="tab" onclick="switchTab('families')">👨‍👩‍👧‍👦 家庭（家长）</button>
-      <button class="tab" onclick="switchTab('children')">👶 孩子</button>
+      <button class="tab" onclick="switchTab('families')">👨‍👩‍👧‍👦 家庭</button>
     </div>
 
     <!-- Toolbar -->
@@ -348,38 +342,12 @@
             <th>设备ID</th>
             <th>邀请码</th>
             <th>家庭成员</th>
-            <th>孩子数量</th>
+            <th>孩子信息</th>
             <th>创建时间</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody id="familiesBody"></tbody>
-      </table>
-    </div>
-
-    <!-- Children Table -->
-    <div id="childrenSection" class="table-container hidden">
-      <div id="childrenLoading" class="loading">加载中...</div>
-      <div id="childrenEmpty" class="empty hidden">
-        <div class="empty-icon">📭</div>
-        <div>暂无孩子数据</div>
-      </div>
-      <table id="childrenTable" class="hidden">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>孩子姓名</th>
-            <th>家庭ID</th>
-            <th>家庭名称</th>
-            <th>出生日期</th>
-            <th>性别</th>
-            <th>医疗记录</th>
-            <th>来源</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="childrenBody"></tbody>
       </table>
     </div>
   </div>
@@ -388,11 +356,9 @@
     let currentTab = 'doctors';
     let doctors = [];
     let families = [];
-    let children = [];
     let filteredData = {
       doctors: [],
-      families: [],
-      children: []
+      families: []
     };
 
     // Switch tabs
@@ -406,11 +372,10 @@
       // Hide all sections
       document.getElementById('doctorsSection').classList.add('hidden');
       document.getElementById('familiesSection').classList.add('hidden');
-      document.getElementById('childrenSection').classList.add('hidden');
       
       // Show/hide clear button based on current tab
       const clearBtn = document.getElementById('clearTableBtn');
-      if (tab === 'doctors' || tab === 'families' || tab === 'children') {
+      if (tab === 'doctors' || tab === 'families') {
         clearBtn.style.display = 'inline-block';
       } else {
         clearBtn.style.display = 'none';
@@ -423,9 +388,6 @@
       } else if (tab === 'families') {
         document.getElementById('familiesSection').classList.remove('hidden');
         renderFamilies();
-      } else if (tab === 'children') {
-        document.getElementById('childrenSection').classList.remove('hidden');
-        renderChildren();
       }
     }
 
@@ -434,7 +396,6 @@
       await Promise.all([
         loadDoctors(),
         loadFamilies(),
-        loadChildren(),
         loadSummary()
       ]);
     }
@@ -484,37 +445,19 @@
           families = result.data || [];
           filteredData.families = families;
           renderFamilies();
+          
+          // Update children count in summary
+          let totalChildren = 0;
+          families.forEach(family => {
+            if (family.children && Array.isArray(family.children)) {
+              totalChildren += family.children.length;
+            }
+          });
+          document.getElementById('statFamiliesSub').textContent = `孩子总数: ${totalChildren}`;
         }
       } catch (err) {
         console.error('Error loading families:', err);
         alert('加载家庭数据失败: ' + err.message);
-      } finally {
-        loadingEl.classList.add('hidden');
-      }
-    }
-
-    // Load children
-    async function loadChildren() {
-      const loadingEl = document.getElementById('childrenLoading');
-      const tableEl = document.getElementById('childrenTable');
-      const emptyEl = document.getElementById('childrenEmpty');
-      
-      loadingEl.classList.remove('hidden');
-      tableEl.classList.add('hidden');
-      emptyEl.classList.add('hidden');
-
-      try {
-        const res = await fetch('/api/admin/children');
-        const result = await res.json();
-        
-        if (result.success) {
-          children = result.data || [];
-          filteredData.children = children;
-          renderChildren();
-        }
-      } catch (err) {
-        console.error('Error loading children:', err);
-        alert('加载孩子数据失败: ' + err.message);
       } finally {
         loadingEl.classList.add('hidden');
       }
@@ -530,11 +473,12 @@
           const data = result.data;
           document.getElementById('statDoctors').textContent = data.doctors || 0;
           document.getElementById('statFamilies').textContent = data.families || 0;
-          document.getElementById('statChildren').textContent = data.children || 0;
           
           // Update subtitles
           const approvedDoctors = doctors.filter(d => d.ai_review_status === 'approved').length;
           document.getElementById('statDoctorsSub').textContent = `已审核: ${approvedDoctors}`;
+          
+          // Children count is updated in loadFamilies() after families are loaded
         }
       } catch (err) {
         console.error('Error loading summary:', err);
@@ -622,56 +566,29 @@
           membersInfo = '-';
         }
         
+        // Format children info (from chat extraction)
+        let childrenInfo = '';
+        if (children.length > 0) {
+          childrenInfo = children.map(c => {
+            const dob = c.date_of_birth || '-';
+            const gender = c.gender || '-';
+            const source = c.extracted_from_chat ? '聊天提取' : '手动录入';
+            return `${c.child_name || '未命名'} (${dob}, ${gender}) [${source}]`;
+          }).join('<br>');
+        } else {
+          childrenInfo = '暂无孩子记录';
+        }
+        
         row.innerHTML = `
           <td>${family.family_id || '-'}</td>
           <td>${family.family_name || '-'}</td>
           <td class="text-small">${family.device_id || '-'}</td>
           <td>${family.invite_code || '-'}</td>
           <td class="text-small">${membersInfo}</td>
-          <td>${children.length}</td>
+          <td class="text-small">${childrenInfo}</td>
           <td class="text-muted">${formatDate(family.created_at)}</td>
           <td>
             <button class="btn btn-sm btn-danger" onclick="deleteFamily('${family.family_id}')">删除</button>
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
-
-    // Render children table
-    function renderChildren() {
-      const tbody = document.getElementById('childrenBody');
-      const tableEl = document.getElementById('childrenTable');
-      const emptyEl = document.getElementById('childrenEmpty');
-      
-      tbody.innerHTML = '';
-
-      if (filteredData.children.length === 0) {
-        tableEl.classList.add('hidden');
-        emptyEl.classList.remove('hidden');
-        return;
-      }
-
-      tableEl.classList.remove('hidden');
-      emptyEl.classList.add('hidden');
-
-      filteredData.children.forEach(child => {
-        const row = document.createElement('tr');
-        const source = child.extracted_from_chat ? '聊天提取' : '手动录入';
-        const sourceClass = child.extracted_from_chat ? 'badge-info' : 'badge-success';
-        
-        row.innerHTML = `
-          <td>${child.id || '-'}</td>
-          <td>${child.child_name || '-'}</td>
-          <td class="text-small">${child.family_id || '-'}</td>
-          <td>${child.family_name || '-'}</td>
-          <td>${child.date_of_birth || '-'}</td>
-          <td>${child.gender || '-'}</td>
-          <td class="text-muted text-small">${(child.medical_record || '').substring(0, 50)}${child.medical_record && child.medical_record.length > 50 ? '...' : ''}</td>
-          <td><span class="badge ${sourceClass}">${source}</span></td>
-          <td class="text-muted">${formatDate(child.created_at)}</td>
-          <td>
-            <button class="btn btn-sm btn-danger" onclick="deleteChild(${child.id})">删除</button>
           </td>
         `;
         tbody.appendChild(row);
@@ -693,21 +610,30 @@
         );
         renderDoctors();
       } else if (currentTab === 'families') {
-        filteredData.families = families.filter(f => 
-          (f.family_id && f.family_id.toLowerCase().includes(query)) ||
-          (f.family_name && f.family_name.toLowerCase().includes(query)) ||
-          (f.email && f.email.toLowerCase().includes(query)) ||
-          (f.phone && f.phone.includes(query))
-        );
+        filteredData.families = families.filter(f => {
+          // Search in family basic info
+          const basicMatch = 
+            (f.family_id && f.family_id.toLowerCase().includes(query)) ||
+            (f.family_name && f.family_name.toLowerCase().includes(query)) ||
+            (f.device_id && f.device_id.toLowerCase().includes(query)) ||
+            (f.invite_code && f.invite_code.toLowerCase().includes(query));
+          
+          // Search in family members
+          const membersMatch = (f.members || []).some(m => 
+            (m.email && m.email.toLowerCase().includes(query)) ||
+            (m.phone && m.phone.includes(query)) ||
+            (m.member_name && m.member_name.toLowerCase().includes(query))
+          );
+          
+          // Search in children
+          const childrenMatch = (f.children || []).some(c => 
+            (c.child_name && c.child_name.toLowerCase().includes(query)) ||
+            (c.medical_record && c.medical_record.toLowerCase().includes(query))
+          );
+          
+          return basicMatch || membersMatch || childrenMatch;
+        });
         renderFamilies();
-      } else if (currentTab === 'children') {
-        filteredData.children = children.filter(c => 
-          (c.child_name && c.child_name.toLowerCase().includes(query)) ||
-          (c.family_id && c.family_id.toLowerCase().includes(query)) ||
-          (c.family_name && c.family_name.toLowerCase().includes(query)) ||
-          (c.medical_record && c.medical_record.toLowerCase().includes(query))
-        );
-        renderChildren();
       }
     }
 
@@ -761,31 +687,6 @@
       }
     }
     
-    // Delete child
-    async function deleteChild(childId) {
-      if (!confirm(`确定要删除这个孩子记录吗？此操作不可恢复！`)) {
-        return;
-      }
-      
-      try {
-        const res = await fetch(`/api/admin/children/${childId}`, {
-          method: 'DELETE'
-        });
-        const result = await res.json();
-        
-        if (result.success) {
-          alert(result.message || '删除成功');
-          await loadChildren();
-          await loadSummary();
-        } else {
-          alert('删除失败: ' + (result.message || result.error));
-        }
-      } catch (err) {
-        console.error('Error deleting child:', err);
-        alert('删除失败: ' + err.message);
-      }
-    }
-    
     // Clear current table
     async function clearCurrentTable() {
       let tableName = '';
@@ -797,9 +698,6 @@
       } else if (currentTab === 'families') {
         tableName = 'families';
         tableNameCN = '家庭';
-      } else if (currentTab === 'children') {
-        tableName = 'children';
-        tableNameCN = '孩子';
       } else {
         alert('请先选择一个表单');
         return;
