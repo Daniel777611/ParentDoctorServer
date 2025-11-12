@@ -1539,17 +1539,29 @@
       
       ws.onopen = () => {
         console.log('✅ WebSocket connected');
+        console.log('🔍 About to register with doctorId:', doctorId);
         // Update status display
         const wsStatusEl = document.getElementById('displayWsStatus');
         if (wsStatusEl) wsStatusEl.textContent = 'Connected';
         
+        if (!doctorId) {
+          console.error('❌ Cannot register: doctorId is null or undefined!');
+          if (wsStatusEl) wsStatusEl.textContent = 'Error: No Doctor ID';
+          return;
+        }
+        
         // Register with doctor ID
         const registerMsg = {
           type: 'register',
-          id: doctorId
+          id: String(doctorId) // Ensure it's a string
         };
-        console.log('📤 Sending register message:', registerMsg);
-        ws.send(JSON.stringify(registerMsg));
+        console.log('📤 Sending register message:', JSON.stringify(registerMsg, null, 2));
+        try {
+          ws.send(JSON.stringify(registerMsg));
+          console.log('✅ Register message sent successfully');
+        } catch (err) {
+          console.error('❌ Error sending register message:', err);
+        }
       };
       
       ws.onmessage = (event) => {
@@ -1604,10 +1616,21 @@
         console.error('❌ WebSocket error details:', JSON.stringify(error, null, 2));
       };
       
-      ws.onclose = () => {
-        console.log('📴 WebSocket closed, reconnecting...');
-        // Reconnect after 3 seconds
-        setTimeout(connectWebSocket, 3000);
+      ws.onclose = (event) => {
+        console.log('📴 WebSocket closed');
+        console.log('📴 Close code:', event.code);
+        console.log('📴 Close reason:', event.reason);
+        console.log('📴 Was clean:', event.wasClean);
+        // Update status display
+        const wsStatusEl = document.getElementById('displayWsStatus');
+        if (wsStatusEl) wsStatusEl.textContent = 'Disconnected';
+        // Reconnect after 3 seconds (only if we have a doctorId)
+        if (doctorId) {
+          console.log('🔄 Reconnecting in 3 seconds...');
+          setTimeout(connectWebSocket, 3000);
+        } else {
+          console.error('❌ Cannot reconnect: no doctorId');
+        }
       };
     }
     
