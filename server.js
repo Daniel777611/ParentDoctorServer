@@ -400,6 +400,68 @@ app.delete("/api/admin/children/:childId", async (req, res) => {
   }
 });
 
+// ✅ Get All Family Members (Parents)
+app.get("/api/admin/members", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT m.*, f.family_name, f.invite_code
+      FROM family_member m
+      LEFT JOIN family f ON m.family_id = f.family_id
+      ORDER BY m.created_at DESC
+    `);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (err) {
+    console.error("❌ Error fetching members:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Delete Single Family Member (Parent)
+app.delete("/api/admin/members/:memberId", async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    
+    // Check if member exists and get family_id
+    const { rows: existing } = await pool.query(
+      "SELECT id, family_id, email, phone FROM family_member WHERE id = $1",
+      [memberId]
+    );
+    
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: "Family member not found." });
+    }
+    
+    const member = existing[0];
+    
+    // Delete member's folder from R2 if exists
+    let deletedFiles = 0;
+    if (member.family_id) {
+      const memberIdentifier = member.email || member.phone || `member_${member.id}`;
+      const folderPrefix = `HealthAssistance/family/${member.family_id}/${memberIdentifier}/`;
+      deletedFiles = await deleteFolderFromR2(folderPrefix);
+    }
+    
+    // Delete member
+    const deleteResult = await pool.query(
+      "DELETE FROM family_member WHERE id = $1",
+      [memberId]
+    );
+    
+    const deletedCount = deleteResult.rowCount || 0;
+    console.log(`🗑️  Deleted family member ${memberId}: ${deletedFiles} file(s) deleted from R2`);
+    
+    res.json({
+      success: true,
+      message: `Family member deleted successfully. ${deletedFiles} file(s) deleted from R2.`,
+      deletedCount,
+      deletedFiles,
+    });
+  } catch (err) {
+    console.error("❌ Error deleting family member:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ✅ Get All Children
 app.get("/api/admin/children", async (_req, res) => {
   try {
@@ -968,6 +1030,27 @@ app.delete("/api/admin/clear/:table", async (req, res) => {
       deletedCount = result.rowCount || 0;
       message = `All families cleared successfully. ${deletedCount} family(ies) deleted, ${deletedFiles} file(s) deleted from R2.`;
       
+    } else if (table === "members") {
+      // Get all members to delete their folders from R2
+      const { rows: members } = await pool.query(
+        "SELECT id, family_id, email, phone FROM family_member"
+      );
+      
+      // Delete each member's folder from R2
+      for (const member of members) {
+        if (member.family_id) {
+          const memberIdentifier = member.email || member.phone || `member_${member.id}`;
+          const folderPrefix = `HealthAssistance/family/${member.family_id}/${memberIdentifier}/`;
+          const filesDeleted = await deleteFolderFromR2(folderPrefix);
+          deletedFiles += filesDeleted;
+        }
+      }
+      
+      // Delete all members from database
+      const result = await pool.query("DELETE FROM family_member");
+      deletedCount = result.rowCount || 0;
+      message = `All family members cleared successfully. ${deletedCount} member(s) deleted, ${deletedFiles} file(s) deleted from R2.`;
+      
     } else if (table === "children") {
       // Delete all children
       const result = await pool.query("DELETE FROM child");
@@ -977,7 +1060,7 @@ app.delete("/api/admin/clear/:table", async (req, res) => {
     } else {
       return res.status(400).json({ 
         success: false, 
-        message: "Invalid table name. Use 'doctors', 'families', or 'children'." 
+        message: "Invalid table name. Use 'doctors', 'families', 'members', or 'children'." 
       });
     }
     

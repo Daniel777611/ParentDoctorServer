@@ -283,12 +283,18 @@
         <div class="value" id="statFamilies">0</div>
         <div class="subtitle" id="statFamiliesSub">孩子总数: 0</div>
       </div>
+      <div class="stat-card">
+        <div class="label">家长总数</div>
+        <div class="value" id="statMembers">0</div>
+        <div class="subtitle" id="statMembersSub">已注册: 0</div>
+      </div>
     </div>
 
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab active" onclick="switchTab('doctors')">👨‍⚕️ 医生</button>
       <button class="tab" onclick="switchTab('families')">👨‍👩‍👧‍👦 家庭</button>
+      <button class="tab" onclick="switchTab('members')">👨‍👩‍👧 家长</button>
     </div>
 
     <!-- Toolbar -->
@@ -350,15 +356,43 @@
         <tbody id="familiesBody"></tbody>
       </table>
     </div>
+
+    <!-- Members Table -->
+    <div id="membersSection" class="table-container hidden">
+      <div id="membersLoading" class="loading">加载中...</div>
+      <div id="membersEmpty" class="empty hidden">
+        <div class="empty-icon">📭</div>
+        <div>暂无家长数据</div>
+      </div>
+      <table id="membersTable" class="hidden">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>家庭ID</th>
+            <th>家庭名称</th>
+            <th>成员姓名</th>
+            <th>角色</th>
+            <th>邮箱</th>
+            <th>电话</th>
+            <th>登录方式</th>
+            <th>创建时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="membersBody"></tbody>
+      </table>
+    </div>
   </div>
 
   <script>
     let currentTab = 'doctors';
     let doctors = [];
     let families = [];
+    let members = [];
     let filteredData = {
       doctors: [],
-      families: []
+      families: [],
+      members: []
     };
 
     // Switch tabs
@@ -372,10 +406,11 @@
       // Hide all sections
       document.getElementById('doctorsSection').classList.add('hidden');
       document.getElementById('familiesSection').classList.add('hidden');
+      document.getElementById('membersSection').classList.add('hidden');
       
       // Show/hide clear button based on current tab
       const clearBtn = document.getElementById('clearTableBtn');
-      if (tab === 'doctors' || tab === 'families') {
+      if (tab === 'doctors' || tab === 'families' || tab === 'members') {
         clearBtn.style.display = 'inline-block';
       } else {
         clearBtn.style.display = 'none';
@@ -388,6 +423,9 @@
       } else if (tab === 'families') {
         document.getElementById('familiesSection').classList.remove('hidden');
         renderFamilies();
+      } else if (tab === 'members') {
+        document.getElementById('membersSection').classList.remove('hidden');
+        renderMembers();
       }
     }
 
@@ -396,6 +434,7 @@
       await Promise.all([
         loadDoctors(),
         loadFamilies(),
+        loadMembers(),
         loadSummary()
       ]);
     }
@@ -458,6 +497,36 @@
       } catch (err) {
         console.error('Error loading families:', err);
         alert('加载家庭数据失败: ' + err.message);
+      } finally {
+        loadingEl.classList.add('hidden');
+      }
+    }
+
+    // Load members
+    async function loadMembers() {
+      const loadingEl = document.getElementById('membersLoading');
+      const tableEl = document.getElementById('membersTable');
+      const emptyEl = document.getElementById('membersEmpty');
+      
+      loadingEl.classList.remove('hidden');
+      tableEl.classList.add('hidden');
+      emptyEl.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/admin/members');
+        const result = await res.json();
+        
+        if (result.success) {
+          members = result.data || [];
+          filteredData.members = members;
+          renderMembers();
+          
+          // Update members count in summary
+          document.getElementById('statMembers').textContent = members.length;
+        }
+      } catch (err) {
+        console.error('Error loading members:', err);
+        alert('加载家长数据失败: ' + err.message);
       } finally {
         loadingEl.classList.add('hidden');
       }
@@ -549,7 +618,7 @@
         const members = family.members || [];
         const children = family.children || [];
         
-        // Format members info (each member = one connection information)
+        // Format members info (each member = one connection information) with delete button
         let membersInfo = '';
         if (members.length > 0) {
           membersInfo = members.map(m => {
@@ -560,7 +629,7 @@
             const role = m.role || 'parent';
             const roleText = role === 'dad' ? '爸爸' : role === 'mom' ? '妈妈' : '家长';
             const contact = m.email || m.phone || '-';
-            return `${roleText}(${contact}) [${authProviderText}]`;
+            return `${roleText}(${contact}) [${authProviderText}] <button class="btn btn-sm btn-danger" onclick="deleteMember(${m.id}, event)" style="margin-left: 8px; padding: 2px 8px; font-size: 11px;">删除</button>`;
           }).join('<br>');
         } else {
           membersInfo = '-';
@@ -589,6 +658,50 @@
           <td class="text-muted">${formatDate(family.created_at)}</td>
           <td>
             <button class="btn btn-sm btn-danger" onclick="deleteFamily('${family.family_id}')">删除</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Render members table
+    function renderMembers() {
+      const tbody = document.getElementById('membersBody');
+      const tableEl = document.getElementById('membersTable');
+      const emptyEl = document.getElementById('membersEmpty');
+      
+      tbody.innerHTML = '';
+
+      if (filteredData.members.length === 0) {
+        tableEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      tableEl.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+
+      filteredData.members.forEach(member => {
+        const row = document.createElement('tr');
+        const authProvider = member.auth_provider || 'email';
+        const authProviderText = authProvider === 'apple' ? 'Apple' : 
+                                authProvider === 'google' ? 'Google' : 
+                                authProvider === 'phone' ? '手机' : '邮箱';
+        const role = member.role || 'parent';
+        const roleText = role === 'dad' ? '爸爸' : role === 'mom' ? '妈妈' : '家长';
+        
+        row.innerHTML = `
+          <td>${member.id || '-'}</td>
+          <td class="text-small">${member.family_id || '-'}</td>
+          <td>${member.family_name || '-'}</td>
+          <td>${member.member_name || '-'}</td>
+          <td>${roleText}</td>
+          <td>${member.email || '-'}</td>
+          <td>${member.phone || '-'}</td>
+          <td>${authProviderText}</td>
+          <td class="text-muted">${formatDate(member.created_at)}</td>
+          <td>
+            <button class="btn btn-sm btn-danger" onclick="deleteMember(${member.id})">删除</button>
           </td>
         `;
         tbody.appendChild(row);
@@ -634,6 +747,16 @@
           return basicMatch || membersMatch || childrenMatch;
         });
         renderFamilies();
+      } else if (currentTab === 'members') {
+        filteredData.members = members.filter(m => 
+          (m.family_id && m.family_id.toLowerCase().includes(query)) ||
+          (m.family_name && m.family_name.toLowerCase().includes(query)) ||
+          (m.member_name && m.member_name.toLowerCase().includes(query)) ||
+          (m.email && m.email.toLowerCase().includes(query)) ||
+          (m.phone && m.phone.includes(query)) ||
+          (m.role && m.role.toLowerCase().includes(query))
+        );
+        renderMembers();
       }
     }
 
@@ -677,12 +800,43 @@
         if (result.success) {
           alert(result.message || '删除成功');
           await loadFamilies();
+          await loadMembers();
           await loadSummary();
         } else {
           alert('删除失败: ' + (result.message || result.error));
         }
       } catch (err) {
         console.error('Error deleting family:', err);
+        alert('删除失败: ' + err.message);
+      }
+    }
+    
+    // Delete member
+    async function deleteMember(memberId, event) {
+      if (event) {
+        event.stopPropagation();
+      }
+      
+      if (!confirm(`确定要删除这个家长吗？此操作不可恢复！`)) {
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/admin/members/${memberId}`, {
+          method: 'DELETE'
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          alert(result.message || '删除成功');
+          await loadMembers();
+          await loadFamilies();
+          await loadSummary();
+        } else {
+          alert('删除失败: ' + (result.message || result.error));
+        }
+      } catch (err) {
+        console.error('Error deleting member:', err);
         alert('删除失败: ' + err.message);
       }
     }
@@ -698,6 +852,9 @@
       } else if (currentTab === 'families') {
         tableName = 'families';
         tableNameCN = '家庭';
+      } else if (currentTab === 'members') {
+        tableName = 'members';
+        tableNameCN = '家长';
       } else {
         alert('请先选择一个表单');
         return;
