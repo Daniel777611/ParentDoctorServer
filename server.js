@@ -91,7 +91,49 @@ const pool = new Pool({
       ALTER TABLE doctor 
       ADD COLUMN IF NOT EXISTS avatar TEXT;
     `);
+    
+    // ✅ family table (for parents)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS family (
+        id SERIAL PRIMARY KEY,
+        family_id VARCHAR(50) UNIQUE NOT NULL,
+        family_name VARCHAR(200),
+        email VARCHAR(200),
+        phone VARCHAR(50),
+        device_id VARCHAR(200),
+        invite_code VARCHAR(20) UNIQUE,
+        auth_provider VARCHAR(50), -- 'email', 'apple', 'google', 'phone'
+        auth_provider_id VARCHAR(200), -- Provider-specific ID (e.g., Apple user ID)
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    
+    // ✅ child table (children information extracted from chat)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS child (
+        id SERIAL PRIMARY KEY,
+        family_id VARCHAR(50) NOT NULL REFERENCES family(family_id) ON DELETE CASCADE,
+        child_name VARCHAR(200),
+        date_of_birth DATE,
+        gender VARCHAR(20),
+        medical_record TEXT,
+        extracted_from_chat BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    
+    // Create indexes
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_family_email ON family(email);
+      CREATE INDEX IF NOT EXISTS idx_family_phone ON family(phone);
+      CREATE INDEX IF NOT EXISTS idx_family_invite_code ON family(invite_code);
+      CREATE INDEX IF NOT EXISTS idx_child_family_id ON child(family_id);
+    `);
+    
     client.release();
+    console.log("✅ Database tables initialized successfully.");
   } catch (err) {
     console.error("❌ PostgreSQL connection failed:", err.message);
   }
@@ -622,6 +664,285 @@ wss.on("connection", (ws) => {
   });
 });
 
+
+// ✅ Parent/Family Registration - Send Verification Code
+app.post("/api/parent/verify/send-code", async (req, res) => {
+  try {
+    const email = (req.body?.email || "").trim().toLowerCase();
+    const phone = (req.body?.phone || "").trim();
+    
+    if (!email && !phone) {
+      return res.status(400).json({ success: false, message: "Email or phone is required." });
+    }
+    
+    // Check if already registered
+    if (email) {
+      const { rows } = await pool.query("SELECT family_id FROM family WHERE lower(email) = $1 LIMIT 1", [email]);
+      if (rows.length > 0) {
+        return res.status(400).json({ success: false, message: "This email is already registered." });
+      }
+    }
+    if (phone) {
+      const { rows } = await pool.query("SELECT family_id FROM family WHERE phone = $1 LIMIT 1", [phone]);
+      if (rows.length > 0) {
+        return res.status(400).json({ success: false, message: "This phone number is already registered." });
+      }
+    }
+    
+    // Generate 6-digit code
+    const code = generateVerificationCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    
+    // Store code with identifier
+    const identifier = email || phone;
+    verificationCodes.set(`parent_${identifier}`, { code, expiresAt, email, phone });
+    
+    // Send verification code
+    if (email) {
+      const sent = await sendVerificationCode(email, code);
+      if (!sent) {
+        return res.status(500).json({ success: false, message: "Failed to send verification code. Please try again." });
+      }
+    } else if (phone) {
+      // TODO: Implement SMS sending via Twilio
+      console.log(`📱 SMS verification code for ${phone}: ${code}`);
+    }
+    
+    res.json({ success: true, message: "Verification code sent." });
+  } catch (err) {
+    console.error("❌ Error sending parent verification code:", err.message);
+    res.status(500).json({ success: false, error: "Failed to send verification code." });
+  }
+});
+
+// ✅ Parent/Family Registration - Verify Code and Register
+app.post("/api/parent/register", async (req, res) => {
+  try {
+    const { email, phone, code, familyName, deviceId, authProvider, authProviderId } = req.body;
+    
+    if (!email && !phone) {
+      return res.status(400).json({ success: false, message: "Email or phone is required." });
+    }
+    
+    // Verify code (skip for OAuth providers)
+    if (authProvider !== "apple" && authProvider !== "google") {
+      const identifier = (email || "").trim().toLowerCase() || phone;
+      const stored = verificationCodes.get(`parent_${identifier}`);
+      
+      if (!stored) {
+        return res.status(400).json({ success: false, message: "Verification code not found or expired." });
+      }
+      
+      if (Date.now() > stored.expiresAt) {
+        verificationCodes.delete(`parent_${identifier}`);
+        return res.status(400).json({ success: false, message: "Verification code has expired." });
+      }
+      
+      if (stored.code !== code) {
+        return res.status(400).json({ success: false, message: "Invalid verification code." });
+      }
+    }
+    
+    // Generate family_id and invite_code
+    const familyId = "fam_" + uuidv4().split("-")[0];
+    const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6-character code
+    
+    // Generate device_id if not provided
+    const finalDeviceId = deviceId || "device_" + uuidv4();
+    
+    // Insert into database
+    const result = await pool.query(
+      `INSERT INTO family (
+        family_id, family_name, email, phone, device_id, invite_code, auth_provider, auth_provider_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *`,
+      [
+        familyId,
+        familyName || null,
+        email ? email.trim().toLowerCase() : null,
+        phone || null,
+        finalDeviceId,
+        inviteCode,
+        authProvider || "email",
+        authProviderId || null
+      ]
+    );
+    
+    // Clear verification code
+    const identifier = (email || "").trim().toLowerCase() || phone;
+    verificationCodes.delete(`parent_${identifier}`);
+    
+    res.status(201).json({
+      success: true,
+      message: "Family registered successfully.",
+      family: result.rows[0],
+    });
+  } catch (err) {
+    console.error("❌ Error registering family:", err.message);
+    if (err.code === "23505") { // Unique constraint violation
+      return res.status(400).json({ success: false, message: "This email or phone is already registered." });
+    }
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Parent/Family Login - Send Code
+app.post("/api/parent/login/send-code", async (req, res) => {
+  try {
+    const email = (req.body?.email || "").trim().toLowerCase();
+    const phone = (req.body?.phone || "").trim();
+    
+    if (!email && !phone) {
+      return res.status(400).json({ success: false, message: "Email or phone is required." });
+    }
+    
+    // Check if registered
+    let query = "SELECT * FROM family WHERE ";
+    let params = [];
+    if (email) {
+      query += "lower(email) = $1";
+      params.push(email);
+    } else {
+      query += "phone = $1";
+      params.push(phone);
+    }
+    query += " LIMIT 1";
+    
+    const { rows } = await pool.query(query, params);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Account not found. Please register first." });
+    }
+    
+    // Generate code
+    const code = generateVerificationCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const identifier = email || phone;
+    verificationCodes.set(`parent_login_${identifier}`, { code, expiresAt });
+    
+    // Send code
+    if (email) {
+      const sent = await sendVerificationCode(email, code);
+      if (!sent) {
+        return res.status(500).json({ success: false, message: "Failed to send verification code." });
+      }
+    } else if (phone) {
+      console.log(`📱 SMS login code for ${phone}: ${code}`);
+    }
+    
+    res.json({ success: true, message: "Verification code sent." });
+  } catch (err) {
+    console.error("❌ Error sending parent login code:", err.message);
+    res.status(500).json({ success: false, error: "Failed to send verification code." });
+  }
+});
+
+// ✅ Parent/Family Login - Verify Code
+app.post("/api/parent/login/verify-code", async (req, res) => {
+  try {
+    const { email, phone, code } = req.body;
+    
+    if (!email && !phone) {
+      return res.status(400).json({ success: false, message: "Email or phone is required." });
+    }
+    
+    // Verify code
+    const identifier = (email || "").trim().toLowerCase() || phone;
+    const stored = verificationCodes.get(`parent_login_${identifier}`);
+    
+    if (!stored || Date.now() > stored.expiresAt || stored.code !== code) {
+      return res.status(400).json({ success: false, message: "Invalid or expired verification code." });
+    }
+    
+    // Get family info
+    let query = "SELECT * FROM family WHERE ";
+    let params = [];
+    if (email) {
+      query += "lower(email) = $1";
+      params.push(email);
+    } else {
+      query += "phone = $1";
+      params.push(phone);
+    }
+    query += " LIMIT 1";
+    
+    const { rows } = await pool.query(query, params);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Account not found." });
+    }
+    
+    // Clear code
+    verificationCodes.delete(`parent_login_${identifier}`);
+    
+    res.json({ success: true, family: rows[0], message: "Login successful." });
+  } catch (err) {
+    console.error("❌ Error verifying parent login code:", err.message);
+    res.status(500).json({ success: false, error: "Failed to verify code." });
+  }
+});
+
+// ✅ Get Family Info
+app.get("/api/parent/family/:familyId", async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { rows } = await pool.query(
+      `SELECT f.*, 
+       (SELECT json_agg(c.*) FROM child c WHERE c.family_id = f.family_id) as children
+       FROM family f 
+       WHERE f.family_id = $1`,
+      [familyId]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Family not found." });
+    }
+    
+    res.json({ success: true, family: rows[0] });
+  } catch (err) {
+    console.error("❌ Error fetching family:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Add/Update Child Info (from chat extraction)
+app.post("/api/parent/child", async (req, res) => {
+  try {
+    const { familyId, childName, dateOfBirth, gender, medicalRecord } = req.body;
+    
+    if (!familyId) {
+      return res.status(400).json({ success: false, message: "Family ID is required." });
+    }
+    
+    // Check if child with same name exists for this family
+    const { rows: existing } = await pool.query(
+      "SELECT id FROM child WHERE family_id = $1 AND child_name = $2 LIMIT 1",
+      [familyId, childName]
+    );
+    
+    if (existing.length > 0) {
+      // Update existing
+      const result = await pool.query(
+        `UPDATE child 
+         SET date_of_birth = $1, gender = $2, medical_record = $3, updated_at = NOW()
+         WHERE family_id = $4 AND child_name = $5
+         RETURNING *`,
+        [dateOfBirth || null, gender || null, medicalRecord || null, familyId, childName]
+      );
+      res.json({ success: true, child: result.rows[0], message: "Child info updated." });
+    } else {
+      // Insert new
+      const result = await pool.query(
+        `INSERT INTO child (family_id, child_name, date_of_birth, gender, medical_record)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [familyId, childName, dateOfBirth || null, gender || null, medicalRecord || null]
+      );
+      res.json({ success: true, child: result.rows[0], message: "Child info added." });
+    }
+  } catch (err) {
+    console.error("❌ Error adding child info:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // ✅ Auto-review all pending doctors on startup (executed once on startup)
 (async () => {
