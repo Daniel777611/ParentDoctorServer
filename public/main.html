@@ -1396,12 +1396,16 @@
       const body = document.body;
       const videoArea = document.getElementById('videoCallArea');
       const patientImage = document.getElementById('patientImage');
+      const connectedVideoContainer = document.getElementById('connectedVideoContainer');
       
       if (connected) {
         body.classList.remove('state-waiting');
         body.classList.add('state-connected');
         videoArea.classList.remove('waiting');
         videoArea.classList.add('connected');
+        if (connectedVideoContainer) {
+          connectedVideoContainer.style.display = 'block';
+        }
         patientImage.classList.add('visible');
         
         // Update AI sections with sample data
@@ -1411,7 +1415,29 @@
         body.classList.add('state-waiting');
         videoArea.classList.remove('connected');
         videoArea.classList.add('waiting');
+        if (connectedVideoContainer) {
+          connectedVideoContainer.style.display = 'none';
+        }
         patientImage.classList.remove('visible');
+        
+        // Clean up streams
+        if (localStream) {
+          localStream.getTracks().forEach(track => track.stop());
+          localStream = null;
+        }
+        if (peerConnection) {
+          peerConnection.close();
+          peerConnection = null;
+        }
+        // Clear video elements
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (localVideo) {
+          localVideo.srcObject = null;
+        }
+        if (remoteVideo) {
+          remoteVideo.srcObject = null;
+        }
         
         // Reset to waiting state
         resetToWaitingState();
@@ -1916,8 +1942,26 @@
 
     // Function to end call
     window.endCall = function() {
+      // Stop all tracks
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      // Close peer connection
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      // Clear video elements
+      const localVideo = document.getElementById('localVideo');
+      const remoteVideo = document.getElementById('remoteVideo');
+      if (localVideo) {
+        localVideo.srcObject = null;
+      }
+      if (remoteVideo) {
+        remoteVideo.srcObject = null;
+      }
       setState(false);
-      // Close WebRTC connection if needed
     };
 
     function logout() {
