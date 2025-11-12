@@ -1193,7 +1193,27 @@
     })();
 
     // Load doctor data
-    const doctorData = JSON.parse(sessionStorage.getItem('doctorData') || '{}');
+    let doctorData = {};
+    try {
+      const doctorDataStr = sessionStorage.getItem('doctorData');
+      console.log('🔍 Raw doctorData string from sessionStorage:', doctorDataStr);
+      if (doctorDataStr) {
+        doctorData = JSON.parse(doctorDataStr);
+        console.log('🔍 Parsed doctorData:', doctorData);
+      } else {
+        console.error('❌ No doctorData in sessionStorage!');
+        // Check if logged in
+        const isLoggedIn = sessionStorage.getItem('doctorLoggedIn');
+        console.log('🔍 doctorLoggedIn:', isLoggedIn);
+        if (!isLoggedIn) {
+          console.error('❌ Not logged in! Redirecting to signin...');
+          window.location.href = '/signin.html';
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error parsing doctorData:', err);
+    }
+    
     const doctorName = `${doctorData.first_name || ''} ${doctorData.last_name || ''}`.trim() || 'Doctor';
     const initials = (doctorData.first_name?.[0] || '') + (doctorData.last_name?.[0] || '') || 'D';
 
