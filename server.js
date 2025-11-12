@@ -180,34 +180,84 @@ const pool = new Pool({
 
 // Helper function to get family with all members
 async function getFamilyWithMembers(familyId) {
-  const { rows: familyRows } = await pool.query(
-    `SELECT * FROM family WHERE family_id = $1`,
-    [familyId]
-  );
-  
-  if (familyRows.length === 0) {
-    return null;
+  try {
+    const { rows: familyRows } = await pool.query(
+      `SELECT * FROM family WHERE family_id = $1`,
+      [familyId]
+    );
+    
+    if (familyRows.length === 0) {
+      return null;
+    }
+    
+    const family = familyRows[0];
+    
+    // Get all members
+    let memberRows = [];
+    try {
+      const memberResult = await pool.query(
+        `SELECT * FROM family_member WHERE family_id = $1 ORDER BY created_at ASC`,
+        [familyId]
+      );
+      memberRows = memberResult.rows || [];
+    } catch (memberErr) {
+      console.warn(`⚠️  Error fetching members for family ${familyId}:`, memberErr.message);
+      memberRows = [];
+    }
+    
+    // Get all children
+    let childRows = [];
+    try {
+      const childResult = await pool.query(
+        `SELECT * FROM child WHERE family_id = $1 ORDER BY created_at ASC`,
+        [familyId]
+      );
+      childRows = childResult.rows || [];
+    } catch (childErr) {
+      console.warn(`⚠️  Error fetching children for family ${familyId}:`, childErr.message);
+      childRows = [];
+    }
+    
+    // Ensure all fields are properly formatted for JSON serialization
+    const result = {
+      id: family.id || null,
+      family_id: family.family_id || null,
+      family_name: family.family_name || null,
+      device_id: family.device_id || null,
+      invite_code: family.invite_code || null,
+      created_at: family.created_at ? new Date(family.created_at).toISOString() : null,
+      updated_at: family.updated_at ? new Date(family.updated_at).toISOString() : null,
+      members: memberRows.map(m => ({
+        id: m.id || null,
+        family_id: m.family_id || null,
+        member_name: m.member_name || null,
+        role: m.role || null,
+        email: m.email || null,
+        phone: m.phone || null,
+        auth_provider: m.auth_provider || null,
+        auth_provider_id: m.auth_provider_id || null,
+        created_at: m.created_at ? new Date(m.created_at).toISOString() : null,
+        updated_at: m.updated_at ? new Date(m.updated_at).toISOString() : null
+      })),
+      children: childRows.map(c => ({
+        id: c.id || null,
+        family_id: c.family_id || null,
+        child_name: c.child_name || null,
+        date_of_birth: c.date_of_birth || null,
+        gender: c.gender || null,
+        medical_record: c.medical_record || null,
+        extracted_from_chat: c.extracted_from_chat || null,
+        created_at: c.created_at ? new Date(c.created_at).toISOString() : null,
+        updated_at: c.updated_at ? new Date(c.updated_at).toISOString() : null
+      }))
+    };
+    
+    return result;
+  } catch (err) {
+    console.error(`❌ Error in getFamilyWithMembers for ${familyId}:`, err.message);
+    console.error(err.stack);
+    throw err;
   }
-  
-  const family = familyRows[0];
-  
-  // Get all members
-  const { rows: memberRows } = await pool.query(
-    `SELECT * FROM family_member WHERE family_id = $1 ORDER BY created_at ASC`,
-    [familyId]
-  );
-  
-  // Get all children
-  const { rows: childRows } = await pool.query(
-    `SELECT * FROM child WHERE family_id = $1 ORDER BY created_at ASC`,
-    [familyId]
-  );
-  
-  return {
-    ...family,
-    members: memberRows,
-    children: childRows
-  };
 }
 
 // Helper to attach device to family (ensures family_device table is populated)
@@ -1434,7 +1484,22 @@ app.post("/api/parent/register", async (req, res) => {
     verificationCodes.delete(`parent_${identifier}`);
     
     // Get family with all members
-    const familyWithMembers = await getFamilyWithMembers(finalFamilyId);
+    let familyWithMembers;
+    try {
+      familyWithMembers = await getFamilyWithMembers(finalFamilyId);
+      if (!familyWithMembers) {
+        throw new Error("Failed to retrieve family data after registration");
+      }
+    } catch (fetchErr) {
+      console.error("❌ Error fetching family after registration:", fetchErr.message);
+      // Even if fetching fails, registration was successful, so return basic info
+      familyWithMembers = {
+        family_id: finalFamilyId,
+        invite_code: finalInviteCode,
+        members: [memberResult.rows[0]],
+        children: []
+      };
+    }
     
     res.status(201).json({
       success: true,
@@ -1443,10 +1508,11 @@ app.post("/api/parent/register", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Error registering family:", err.message);
+    console.error("❌ Error stack:", err.stack);
     if (err.code === "23505") { // Unique constraint violation
       return res.status(400).json({ success: false, message: "This email or phone is already registered." });
     }
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message || "Internal server error" });
   }
 });
 
@@ -1590,9 +1656,17 @@ app.post("/api/parent/login/verify-code", async (req, res) => {
     const member = memberRows[0];
     
     // Get family info with all members
-    const familyWithMembers = await getFamilyWithMembers(member.family_id);
-    if (!familyWithMembers) {
-      return res.status(404).json({ success: false, message: "Family not found." });
+    let familyWithMembers;
+    try {
+      familyWithMembers = await getFamilyWithMembers(member.family_id);
+      if (!familyWithMembers) {
+        console.error(`❌ Family not found for member ${member.id}, family_id: ${member.family_id}`);
+        return res.status(404).json({ success: false, message: "Family not found." });
+      }
+    } catch (fetchErr) {
+      console.error("❌ Error fetching family during login:", fetchErr.message);
+      console.error("❌ Error stack:", fetchErr.stack);
+      return res.status(500).json({ success: false, error: "Failed to retrieve family information." });
     }
     
     // Clear code
@@ -1601,7 +1675,8 @@ app.post("/api/parent/login/verify-code", async (req, res) => {
     res.json({ success: true, family: familyWithMembers, message: "Login successful." });
   } catch (err) {
     console.error("❌ Error verifying parent login code:", err.message);
-    res.status(500).json({ success: false, error: "Failed to verify code." });
+    console.error("❌ Error stack:", err.stack);
+    res.status(500).json({ success: false, error: err.message || "Failed to verify code." });
   }
 });
 
