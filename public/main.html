@@ -1547,10 +1547,12 @@
     let localStream = null;
     let remoteStream = null;
     
-    // Get doctor ID from the doctorData already loaded above (line ~1195-1215)
+    // Get doctor ID from the doctorData already loaded above (line ~1201-1219)
     // doctorData is already available in this scope
     console.log('🔍 Getting doctorId from doctorData:', doctorData);
     console.log('🔍 doctorData keys:', Object.keys(doctorData));
+    console.log('🔍 doctorData type:', typeof doctorData);
+    
     // Try multiple possible field names
     doctorId = doctorData.doctor_id || doctorData.doctorId || doctorData.id || null;
     console.log('🔍 Extracted doctorId:', doctorId);
@@ -1559,21 +1561,46 @@
     if (!doctorId && Object.keys(doctorData).length > 0) {
       console.error('❌ Doctor ID not found! Available keys:', Object.keys(doctorData));
       console.error('❌ Full doctorData:', JSON.stringify(doctorData, null, 2));
+      // Try to extract from all possible fields
+      for (const key in doctorData) {
+        console.log(`  - ${key}: ${doctorData[key]} (type: ${typeof doctorData[key]})`);
+      }
     } else if (!doctorId) {
       console.error('❌ No doctorData found!');
       console.error('❌ sessionStorage doctorData:', sessionStorage.getItem('doctorData'));
       console.error('❌ sessionStorage doctorLoggedIn:', sessionStorage.getItem('doctorLoggedIn'));
       // Try to reload doctorData one more time
       try {
-        const reloadedData = JSON.parse(sessionStorage.getItem('doctorData') || '{}');
-        console.log('🔄 Reloaded doctorData:', reloadedData);
-        doctorId = reloadedData.doctor_id || reloadedData.doctorId || reloadedData.id || null;
-        if (doctorId) {
-          console.log('✅ Found doctorId after reload:', doctorId);
+        const reloadedDataStr = sessionStorage.getItem('doctorData');
+        if (reloadedDataStr) {
+          const reloadedData = JSON.parse(reloadedDataStr);
+          console.log('🔄 Reloaded doctorData:', reloadedData);
+          doctorId = reloadedData.doctor_id || reloadedData.doctorId || reloadedData.id || null;
+          if (doctorId) {
+            console.log('✅ Found doctorId after reload:', doctorId);
+            // Update doctorData for consistency
+            doctorData = reloadedData;
+          } else {
+            console.error('❌ Still no doctorId after reload. Keys:', Object.keys(reloadedData));
+          }
+        } else {
+          console.error('❌ No doctorData in sessionStorage at all!');
         }
       } catch (e) {
         console.error('❌ Error reloading doctorData:', e);
       }
+    }
+    
+    // Final check - if still no doctorId, log everything
+    if (!doctorId) {
+      console.error('❌❌❌ CRITICAL: No doctorId found after all attempts!');
+      console.error('SessionStorage contents:');
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        console.error(`  ${key}: ${sessionStorage.getItem(key)}`);
+      }
+    } else {
+      console.log('✅✅✅ SUCCESS: doctorId is set to:', doctorId);
     }
     
     function connectWebSocket() {
@@ -1877,13 +1904,15 @@
     
     // Connect WebSocket on page load
     function initializeWebSocket() {
-      console.log('🔍 Initial check - doctorId:', doctorId);
-      console.log('🔍 Initial check - doctorData:', doctorData);
+      console.log('🚀 initializeWebSocket() called');
+      console.log('🔍 Current doctorId:', doctorId);
+      console.log('🔍 Current doctorData:', doctorData);
       console.log('🔍 SessionStorage doctorData:', sessionStorage.getItem('doctorData'));
       console.log('🔍 SessionStorage doctorLoggedIn:', sessionStorage.getItem('doctorLoggedIn'));
       
       // Try to reload doctorData if not found
       if (!doctorId) {
+        console.log('⚠️ doctorId is null/undefined, attempting to reload...');
         try {
           const reloadedDataStr = sessionStorage.getItem('doctorData');
           if (reloadedDataStr) {
@@ -1892,7 +1921,12 @@
             doctorId = reloadedData.doctor_id || reloadedData.doctorId || reloadedData.id || null;
             if (doctorId) {
               console.log('✅ Found doctorId after reload:', doctorId);
+              doctorData = reloadedData; // Update doctorData for consistency
+            } else {
+              console.error('❌ Still no doctorId after reload. Keys:', Object.keys(reloadedData));
             }
+          } else {
+            console.error('❌ No doctorData in sessionStorage!');
           }
         } catch (e) {
           console.error('❌ Error reloading doctorData:', e);
@@ -1900,11 +1934,11 @@
       }
       
       if (doctorId) {
-        console.log('✅ Doctor ID found, connecting WebSocket...');
+        console.log('✅✅✅ Doctor ID found:', doctorId, '- Connecting WebSocket...');
         if (displayDoctorIdEl) displayDoctorIdEl.textContent = doctorId;
         connectWebSocket();
       } else {
-        console.error('❌ No doctor ID found! Cannot connect WebSocket.');
+        console.error('❌❌❌ No doctor ID found! Cannot connect WebSocket.');
         // Try to get doctor data from URL params
         const urlParams = new URLSearchParams(window.location.search);
         const doctorIdParam = urlParams.get('doctor_id');
@@ -1918,16 +1952,26 @@
           const wsStatusEl = document.getElementById('displayWsStatus');
           if (wsStatusEl) wsStatusEl.textContent = 'No Doctor ID';
           console.error('❌ Cannot connect: No doctor ID available');
+          console.error('Please ensure you are logged in as a doctor.');
         }
       }
     }
     
     // Initialize when DOM is ready
+    console.log('📄 Script loading, document.readyState:', document.readyState);
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initializeWebSocket);
+      console.log('⏳ Waiting for DOMContentLoaded...');
+      document.addEventListener('DOMContentLoaded', () => {
+        console.log('✅ DOMContentLoaded fired, initializing WebSocket...');
+        initializeWebSocket();
+      });
     } else {
       // DOM is already ready
-      initializeWebSocket();
+      console.log('✅ DOM already ready, initializing WebSocket immediately...');
+      // Use setTimeout to ensure all variables are initialized
+      setTimeout(() => {
+        initializeWebSocket();
+      }, 100);
     }
     
     // Also try to connect when page becomes visible (in case doctor logs in after page load)
