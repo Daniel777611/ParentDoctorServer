@@ -1555,13 +1555,17 @@
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          console.log('📨 WebSocket message received:', msg);
+          console.log('📨 WebSocket message received:', JSON.stringify(msg, null, 2));
           
           if (msg.type === 'registered') {
             console.log('✅ Registered with WebSocket, ID:', msg.id);
             // Update status display
             const wsStatusEl = document.getElementById('displayWsStatus');
             if (wsStatusEl) wsStatusEl.textContent = `Registered (${msg.id})`;
+            // Update doctor ID display if it was different
+            if (msg.id !== doctorId) {
+              console.log('⚠️ Registered ID differs from expected:', msg.id, 'vs', doctorId);
+            }
           } else if (msg.type === 'signal') {
             console.log('📡 Signal received from:', msg.from, 'to:', msg.to, 'payload:', msg.payload);
             

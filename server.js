@@ -1231,8 +1231,18 @@ wss.on("connection", (ws) => {
 
       if (msg.type === "register") {
         myId = String(msg.id || "anon_" + Date.now());
+        // If ID already exists, remove old connection
+        if (peers.has(myId)) {
+          console.log(`⚠️ Replacing existing peer: ${myId}`);
+          try {
+            peers.get(myId).close();
+          } catch (e) {
+            // Ignore errors when closing old connection
+          }
+        }
         peers.set(myId, ws);
         console.log(`✅ Client registered: ${myId} (total peers: ${peers.size})`);
+        console.log(`📋 Available peer IDs: ${Array.from(peers.keys()).join(', ')}`);
         ws.send(JSON.stringify({ type: "registered", id: myId }));
         return;
       }
