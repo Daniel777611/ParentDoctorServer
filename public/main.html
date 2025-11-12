@@ -1876,28 +1876,58 @@
     }
     
     // Connect WebSocket on page load
-    console.log('🔍 Initial check - doctorId:', doctorId);
-    console.log('🔍 Initial check - doctorData:', doctorData);
-    
-    if (doctorId) {
-      console.log('✅ Doctor ID found, connecting WebSocket...');
-      connectWebSocket();
-    } else {
-      console.error('❌ No doctor ID found! Cannot connect WebSocket.');
-      console.error('SessionStorage doctorData:', sessionStorage.getItem('doctorData'));
-      // Try to get doctor data from signin page
-      const urlParams = new URLSearchParams(window.location.search);
-      const doctorIdParam = urlParams.get('doctor_id');
-      if (doctorIdParam) {
-        console.log('📝 Found doctor_id in URL params:', doctorIdParam);
-        doctorId = doctorIdParam;
+    function initializeWebSocket() {
+      console.log('🔍 Initial check - doctorId:', doctorId);
+      console.log('🔍 Initial check - doctorData:', doctorData);
+      console.log('🔍 SessionStorage doctorData:', sessionStorage.getItem('doctorData'));
+      console.log('🔍 SessionStorage doctorLoggedIn:', sessionStorage.getItem('doctorLoggedIn'));
+      
+      // Try to reload doctorData if not found
+      if (!doctorId) {
+        try {
+          const reloadedDataStr = sessionStorage.getItem('doctorData');
+          if (reloadedDataStr) {
+            const reloadedData = JSON.parse(reloadedDataStr);
+            console.log('🔄 Reloaded doctorData:', reloadedData);
+            doctorId = reloadedData.doctor_id || reloadedData.doctorId || reloadedData.id || null;
+            if (doctorId) {
+              console.log('✅ Found doctorId after reload:', doctorId);
+            }
+          }
+        } catch (e) {
+          console.error('❌ Error reloading doctorData:', e);
+        }
+      }
+      
+      if (doctorId) {
+        console.log('✅ Doctor ID found, connecting WebSocket...');
         if (displayDoctorIdEl) displayDoctorIdEl.textContent = doctorId;
         connectWebSocket();
       } else {
-        // Update status to show error
-        const wsStatusEl = document.getElementById('displayWsStatus');
-        if (wsStatusEl) wsStatusEl.textContent = 'No Doctor ID';
+        console.error('❌ No doctor ID found! Cannot connect WebSocket.');
+        // Try to get doctor data from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const doctorIdParam = urlParams.get('doctor_id');
+        if (doctorIdParam) {
+          console.log('📝 Found doctor_id in URL params:', doctorIdParam);
+          doctorId = doctorIdParam;
+          if (displayDoctorIdEl) displayDoctorIdEl.textContent = doctorId;
+          connectWebSocket();
+        } else {
+          // Update status to show error
+          const wsStatusEl = document.getElementById('displayWsStatus');
+          if (wsStatusEl) wsStatusEl.textContent = 'No Doctor ID';
+          console.error('❌ Cannot connect: No doctor ID available');
+        }
       }
+    }
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeWebSocket);
+    } else {
+      // DOM is already ready
+      initializeWebSocket();
     }
     
     // Also try to connect when page becomes visible (in case doctor logs in after page load)
