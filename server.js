@@ -1227,27 +1227,38 @@ wss.on("connection", (ws) => {
   ws.on("message", (buf) => {
     try {
       const msg = JSON.parse(buf.toString() || "{}");
+      console.log("📨 WebSocket message received:", JSON.stringify(msg, null, 2));
 
       if (msg.type === "register") {
         myId = String(msg.id || "anon_" + Date.now());
         peers.set(myId, ws);
+        console.log(`✅ Client registered: ${myId} (total peers: ${peers.size})`);
         ws.send(JSON.stringify({ type: "registered", id: myId }));
         return;
       }
 
       if (msg.type === "signal" && msg.to) {
-        const peer = peers.get(String(msg.to));
+        const targetId = String(msg.to);
+        const peer = peers.get(targetId);
+        console.log(`📡 Routing signal from ${msg.from} to ${targetId}, peer found: ${!!peer}`);
         if (peer && peer.readyState === ws.OPEN) {
+          console.log(`✅ Forwarding signal to ${targetId}`);
           peer.send(JSON.stringify(msg));
+        } else {
+          console.log(`❌ Target ${targetId} not found or not connected. Available peers: ${Array.from(peers.keys()).join(', ')}`);
         }
       }
     } catch (err) {
       console.error("❌ WS message error:", err.message);
+      console.error("❌ Error stack:", err.stack);
     }
   });
 
   ws.on("close", () => {
-    if (myId) peers.delete(myId);
+    if (myId) {
+      peers.delete(myId);
+      console.log(`📴 Client disconnected: ${myId} (remaining peers: ${peers.size})`);
+    }
   });
 });
 

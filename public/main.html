@@ -1493,43 +1493,65 @@
     function connectWebSocket() {
       if (!doctorId) {
         console.log('⚠️ No doctor ID, cannot connect WebSocket');
+        console.log('Doctor data:', doctorData);
         return;
       }
       
+      console.log('🔌 Connecting WebSocket with doctor ID:', doctorId);
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
+      console.log('🔗 WebSocket URL:', wsUrl);
       
       ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
         console.log('✅ WebSocket connected');
         // Register with doctor ID
-        ws.send(JSON.stringify({
+        const registerMsg = {
           type: 'register',
           id: doctorId
-        }));
+        };
+        console.log('📤 Sending register message:', registerMsg);
+        ws.send(JSON.stringify(registerMsg));
       };
       
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          console.log('📨 WebSocket message received:', msg);
           
           if (msg.type === 'registered') {
             console.log('✅ Registered with WebSocket, ID:', msg.id);
-          } else if (msg.type === 'signal' && msg.payload) {
-            // Check if this is an incoming call (offer)
-            if (msg.payload.offer) {
-              handleIncomingCall(msg.from, msg.payload.offer);
-            } else if (msg.payload.answer) {
-              // Answer received (shouldn't happen for doctor, but handle it)
-              console.log('📨 Answer received');
-            } else if (msg.payload.candidate) {
-              // ICE candidate received
-              console.log('🧊 ICE candidate received');
+          } else if (msg.type === 'signal') {
+            console.log('📡 Signal received from:', msg.from, 'to:', msg.to, 'payload:', msg.payload);
+            
+            // Check if this signal is for us
+            if (msg.to && msg.to !== doctorId) {
+              console.log('⚠️ Signal not for this doctor, ignoring');
+              return;
             }
+            
+            if (msg.payload) {
+              // Check if this is an incoming call (offer)
+              if (msg.payload.offer) {
+                console.log('📞 Incoming call offer detected!');
+                handleIncomingCall(msg.from, msg.payload.offer);
+              } else if (msg.payload.answer) {
+                // Answer received (shouldn't happen for doctor, but handle it)
+                console.log('📨 Answer received');
+              } else if (msg.payload.candidate) {
+                // ICE candidate received
+                console.log('🧊 ICE candidate received');
+              } else if (msg.payload.reject) {
+                console.log('❌ Call rejected by caller');
+              }
+            }
+          } else {
+            console.log('📨 Unknown message type:', msg.type);
           }
         } catch (err) {
           console.error('❌ Error parsing WebSocket message:', err);
+          console.error('Raw message:', event.data);
         }
       };
       
