@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require("uuid");
 const { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
 const { runAIReview } = require("./aiReview");
 const { sendVerificationCode } = require("./notification");
+const { handleChatMessage, clearConversation } = require("./aiChat");
 
 
 const app = express();
@@ -1693,6 +1694,50 @@ app.get("/api/parent/family/:familyId", async (req, res) => {
     res.json({ success: true, family: familyWithMembers });
   } catch (err) {
     console.error("❌ Error fetching family:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ AI Chat - Send Message
+app.post("/api/parent/chat", async (req, res) => {
+  try {
+    const { familyId, message } = req.body;
+    
+    if (!familyId) {
+      return res.status(400).json({ success: false, message: "Family ID is required." });
+    }
+    
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, message: "Message is required." });
+    }
+    
+    const result = await handleChatMessage(familyId, message.trim());
+    
+    res.json({
+      success: true,
+      response: result.response,
+      extractedInfo: result.extractedInfo
+    });
+  } catch (err) {
+    console.error("❌ Error handling chat message:", err.message);
+    res.status(500).json({ success: false, error: err.message || "Failed to process chat message." });
+  }
+});
+
+// ✅ AI Chat - Clear Conversation
+app.post("/api/parent/chat/clear", async (req, res) => {
+  try {
+    const { familyId } = req.body;
+    
+    if (!familyId) {
+      return res.status(400).json({ success: false, message: "Family ID is required." });
+    }
+    
+    clearConversation(familyId);
+    
+    res.json({ success: true, message: "Conversation cleared." });
+  } catch (err) {
+    console.error("❌ Error clearing conversation:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
