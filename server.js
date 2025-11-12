@@ -127,6 +127,16 @@ const pool = new Pool({
       );
     `);
     
+    // ✅ family_device table (tracks device IDs associated with a family)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS family_device (
+        id SERIAL PRIMARY KEY,
+        family_id VARCHAR(50) NOT NULL REFERENCES family(family_id) ON DELETE CASCADE,
+        device_id VARCHAR(200) UNIQUE NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    
     // ✅ child table (children information extracted from chat)
     await client.query(`
       CREATE TABLE IF NOT EXISTS child (
@@ -148,7 +158,17 @@ const pool = new Pool({
       CREATE INDEX IF NOT EXISTS idx_family_member_family_id ON family_member(family_id);
       CREATE INDEX IF NOT EXISTS idx_family_member_email ON family_member(email);
       CREATE INDEX IF NOT EXISTS idx_family_member_phone ON family_member(phone);
+      CREATE INDEX IF NOT EXISTS idx_family_device_family_id ON family_device(family_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_family_device_device_id ON family_device(device_id);
       CREATE INDEX IF NOT EXISTS idx_child_family_id ON child(family_id);
+    `);
+    
+    // ✅ Migrate existing device_id values into family_device table
+    await client.query(`
+      INSERT INTO family_device (family_id, device_id)
+      SELECT family_id, device_id FROM family
+      WHERE device_id IS NOT NULL AND device_id <> ''
+      ON CONFLICT (device_id) DO NOTHING;
     `);
     
     client.release();
@@ -188,6 +208,43 @@ async function getFamilyWithMembers(familyId) {
     members: memberRows,
     children: childRows
   };
+}
+
+// Helper to attach device to family (ensures family_device table is populated)
+async function attachDeviceToFamily(familyId, deviceId) {
+  if (!familyId || !deviceId) {
+    return false;
+  }
+
+  const trimmedDeviceId = deviceId.trim();
+  if (!trimmedDeviceId) {
+    return false;
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO family_device (family_id, device_id)
+       VALUES ($1, $2)
+       ON CONFLICT (device_id) DO UPDATE
+       SET family_id = EXCLUDED.family_id,
+           created_at = NOW()`,
+      [familyId, trimmedDeviceId]
+    );
+
+    // Backfill family table's device_id if empty (for compatibility)
+    await pool.query(
+      `UPDATE family
+       SET device_id = $1
+       WHERE family_id = $2
+         AND (device_id IS NULL OR device_id = '')`,
+      [trimmedDeviceId, familyId]
+    );
+
+    return true;
+  } catch (err) {
+    console.error("❌ Error attaching device to family:", err.message);
+    return false;
+  }
 }
 
 // ✅ Health Check
@@ -1099,13 +1156,27 @@ app.post("/api/parent/register", async (req, res) => {
     
     console.log(`📱 Registering family with device_id: ${finalDeviceId}`);
     
-    // Check if family already exists (by device_id or invite_code)
+    // Check if family already exists (by device_id via family_device table)
     let existingFamily = null;
     if (finalDeviceId) {
       const { rows } = await pool.query(
-        "SELECT * FROM family WHERE device_id = $1 LIMIT 1",
+        `SELECT f.*
+         FROM family f
+         LEFT JOIN family_device fd ON fd.family_id = f.family_id
+         WHERE fd.device_id = $1
+         LIMIT 1`,
         [finalDeviceId]
       );
+      // Backward compatibility: also check legacy device_id column if not found
+      if (rows.length === 0) {
+        const legacy = await pool.query(
+          "SELECT * FROM family WHERE device_id = $1 LIMIT 1",
+          [finalDeviceId]
+        );
+        if (legacy.rows.length > 0) {
+          rows.push(legacy.rows[0]);
+        }
+      }
       if (rows.length > 0) {
         existingFamily = rows[0];
         console.log(`📱 Found existing family by device_id: ${existingFamily.family_id}`);
@@ -1136,6 +1207,9 @@ app.post("/api/parent/register", async (req, res) => {
       finalFamilyId = familyResult.rows[0].family_id;
       finalInviteCode = familyResult.rows[0].invite_code;
     }
+    
+    // Attach the device ID to the family (tracks multiple devices)
+    await attachDeviceToFamily(finalFamilyId, finalDeviceId);
     
     // Check if member already exists (by email or phone)
     let memberRole = "parent"; // Default role, can be "dad", "mom", etc.
@@ -1219,6 +1293,47 @@ app.post("/api/parent/register", async (req, res) => {
     if (err.code === "23505") { // Unique constraint violation
       return res.status(400).json({ success: false, message: "This email or phone is already registered." });
     }
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Attach device to family via invite code (before registration)
+app.post("/api/parent/invite/attach", async (req, res) => {
+  try {
+    const inviteCode = (req.body?.inviteCode || "").trim().toUpperCase();
+    let deviceId = (req.body?.deviceId || "").trim();
+
+    if (!inviteCode) {
+      return res.status(400).json({ success: false, message: "Invite code is required." });
+    }
+
+    if (!deviceId) {
+      deviceId = "device_" + uuidv4();
+    }
+
+    const { rows } = await pool.query(
+      "SELECT * FROM family WHERE invite_code = $1 LIMIT 1",
+      [inviteCode]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Invalid invite code." });
+    }
+
+    const family = rows[0];
+
+    await attachDeviceToFamily(family.family_id, deviceId);
+
+    const familyWithMembers = await getFamilyWithMembers(family.family_id);
+
+    res.json({
+      success: true,
+      message: "Device attached to family successfully.",
+      family: familyWithMembers,
+      deviceId,
+    });
+  } catch (err) {
+    console.error("❌ Error attaching device via invite code:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
