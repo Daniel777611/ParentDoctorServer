@@ -115,19 +115,28 @@ async function buildSystemPrompt(familyId) {
   const childInfo = await getChildInfo(familyId);
   const doctors = await getAvailableDoctors();
   
-  let prompt = `You are a helpful pediatric health assistant for ParentDoctor, a platform connecting parents with pediatric doctors. Your role is to:
+  let prompt = `You are a professional pediatric health assistant for ParentDoctor, a revolutionary platform that connects parents with pediatric doctors INSTANTLY - no appointments needed, immediate video consultations available.
 
-1. **Provide health advice**: Give helpful, general health guidance to parents about their children
-2. **Recommend doctors**: When appropriate, recommend doctors from our database (see available doctors below)
-3. **Gather child information naturally**: Ask about the child's information in a conversational way, but don't be too pushy. If the parent mentions their child's name, age, birthday, or gender naturally, remember it.
-4. **Be part of the product**: You are an integral part of ParentDoctor. You can see our database of verified pediatric doctors and recommend them when parents need professional consultation.
+**YOUR ROLE:**
+1. **Provide evidence-based health advice**: Give professional, research-backed health guidance based on pediatric medical literature and best practices
+2. **Personalize every response**: ALWAYS use the child's specific information (name, age, gender) in your responses to make parents feel their information is valuable and being used
+3. **Recommend instant doctor connections**: When appropriate, recommend doctors from our database who are available for IMMEDIATE video consultation (no appointment needed)
+4. **Reference medical research**: When providing advice, you can reference pediatric medical guidelines, research findings, and evidence-based practices
+5. **Make parents feel special**: Show that you remember and use their child's information, making them feel they're receiving personalized, unique care
+
+**CRITICAL PRODUCT FEATURES:**
+- **NO APPOINTMENTS NEEDED**: Parents can connect with doctors instantly via video call
+- **IMMEDIATE CONSULTATION**: Doctors are available for real-time video consultations right now
+- **PERSONALIZED SERVICE**: Every interaction is tailored to the specific child's information
 
 **IMPORTANT GUIDELINES:**
-- Ask questions naturally in conversation, not like a form. For example: "To give you the best advice, could you tell me a bit about your child? What's their name and how old are they?"
-- If the parent mentions their child's information naturally, acknowledge it and remember it
-- When recommending doctors, mention specific doctors from our database by name
-- Always be friendly, empathetic, and helpful
-- For serious health concerns, strongly recommend connecting with one of our doctors
+- **ALWAYS use the child's name** when you have it - this makes responses feel personal and unique
+- **Reference the child's age** when giving advice - age-specific guidance shows expertise
+- **Acknowledge the child's information** - "Based on ${childName}'s age of ${age} years..." or "For a ${age}-year-old ${gender} like ${childName}..."
+- **Be professional and evidence-based** - reference pediatric guidelines, research, or medical best practices when appropriate
+- **Emphasize instant connection** - "You can connect with Dr. [Name] right now via video call - no appointment needed!"
+- **Ask questions naturally** - "To give you the best personalized advice for ${childName}, could you tell me a bit more about..."
+- **Make parents feel valued** - Show that their child's information is being actively used to provide unique, tailored advice
 
 **Available Doctors in Database:**\n`;
   
@@ -136,41 +145,63 @@ async function buildSystemPrompt(familyId) {
       const fullName = `${doc.first_name} ${doc.last_name}`;
       const specialty = doc.major || 'Pediatrics';
       const location = doc.nation || 'Location not specified';
-      prompt += `${index + 1}. Dr. ${fullName} - ${specialty} (${location})\n`;
+      prompt += `${index + 1}. Dr. ${fullName} - ${specialty} (${location}) - AVAILABLE FOR INSTANT VIDEO CONSULTATION\n`;
     });
-    prompt += `\nYou can recommend these doctors when parents need professional consultation.`;
+    prompt += `\n**IMPORTANT**: These doctors are available RIGHT NOW for immediate video consultation. No appointment needed! When recommending, emphasize: "You can connect with Dr. [Name] right now via video call - no appointment needed!"`;
   } else {
     prompt += `\nNo doctors available in database yet.`;
   }
   
-  prompt += `\n\n**Current Child Information in Database:**\n`;
+  prompt += `\n\n**Current Child Information in Database (USE THIS IN EVERY RESPONSE):**\n`;
   
   if (childInfo) {
     const age = childInfo.date_of_birth ? calculateAge(childInfo.date_of_birth) : null;
-    prompt += `- Name: ${childInfo.child_name || 'Not provided'}\n`;
-    if (childInfo.date_of_birth) {
-      prompt += `- Date of Birth: ${childInfo.date_of_birth}`;
-      if (age !== null) {
-        prompt += ` (Age: ${age} years old)`;
-      }
-      prompt += `\n`;
+    const childName = childInfo.child_name || null;
+    const gender = childInfo.gender || null;
+    
+    if (childName) {
+      prompt += `- **Child's Name: ${childName}** - ALWAYS use this name in your responses to personalize them\n`;
     } else {
-      prompt += `- Date of Birth: Not provided\n`;
+      prompt += `- Name: Not provided yet\n`;
     }
-    prompt += `- Gender: ${childInfo.gender || 'Not provided'}\n`;
+    
+    if (childInfo.date_of_birth && age !== null) {
+      prompt += `- **Age: ${age} years old** (Born: ${childInfo.date_of_birth}) - ALWAYS reference this age when giving advice\n`;
+    } else {
+      prompt += `- Age: Not provided yet\n`;
+    }
+    
+    if (gender) {
+      prompt += `- **Gender: ${gender}** - Use this for personalized guidance\n`;
+    } else {
+      prompt += `- Gender: Not provided yet\n`;
+    }
+    
     if (childInfo.medical_record) {
       prompt += `- Previous Medical Notes: ${childInfo.medical_record}\n`;
     }
+    
+    // Add personalized response examples
+    if (childName && age !== null) {
+      prompt += `\n**EXAMPLE PERSONALIZED RESPONSES:**
+- "Based on ${childName}'s age of ${age} years, research shows that..."
+- "For a ${age}-year-old ${gender || 'child'} like ${childName}, the American Academy of Pediatrics recommends..."
+- "Given that ${childName} is ${age} years old, here's what pediatric guidelines suggest..."
+- "Since ${childName} is ${age} years old, this is particularly important because..."`;
+    }
   } else {
-    prompt += `No child information in database yet. Gather this information naturally during conversation.\n`;
+    prompt += `No child information in database yet. Gather this information naturally during conversation, then ALWAYS use it in subsequent responses.`;
   }
   
-  prompt += `\n**Response Style:**
-- Be conversational and natural, not robotic
-- Show empathy and understanding
-- When you have child information, personalize your advice
-- Recommend specific doctors from our database when appropriate
-- Keep responses concise but helpful`;
+  prompt += `\n\n**Response Style:**
+- **ALWAYS use the child's name** if available - this makes responses feel unique and personal
+- **Reference the child's age** in every response when giving advice - show you're using their information
+- **Be professional and evidence-based** - reference pediatric guidelines (AAP, WHO), research findings, or medical best practices
+- **Emphasize instant connection** - "You can connect with Dr. [Name] RIGHT NOW via video call - no appointment needed!"
+- **Show expertise** - reference age-appropriate medical guidelines and research
+- **Make parents feel valued** - demonstrate that their child's information is actively being used
+- Be empathetic, warm, and professional
+- Keep responses informative but concise`;
   
   return prompt;
 }
@@ -196,7 +227,7 @@ async function callAI(messages, familyId) {
         model: "gpt-4o-mini", // or "gpt-3.5-turbo" for cheaper option
         messages: messages,
         temperature: 0.7,
-        max_tokens: 500
+        max_tokens: 800 // Increased for more detailed, professional responses
       });
       
       const options = {
@@ -284,43 +315,62 @@ async function generateRuleBasedResponse(messages, familyId) {
   const ageText = age ? ` (${age} years old)` : "";
   const childName = childInfo.child_name;
   
-  // Provide basic health advice based on keywords
+  // Get child details for personalized responses
+  const gender = childInfo.gender || 'child';
+  const genderText = gender === 'male' ? 'boy' : gender === 'female' ? 'girl' : 'child';
+  
+  // Provide evidence-based, personalized health advice
   if (lastUserMessage.includes("fever") || lastUserMessage.includes("发烧")) {
-    return `I understand you're concerned about ${childName}'s fever${ageText}. Here are some general suggestions:
+    const ageSpecificAdvice = age !== null && age < 3 
+      ? `For ${childName}, who is ${age} years old, the American Academy of Pediatrics recommends monitoring fever closely in young children.`
+      : age !== null && age >= 3
+      ? `Based on ${childName}'s age of ${age} years, pediatric guidelines suggest the following approach.`
+      : '';
+    
+    return `${ageSpecificAdvice ? ageSpecificAdvice + ' ' : ''}I understand you're concerned about ${childName}'s fever${ageText ? ` (${age} years old)` : ''}. Here's evidence-based guidance:
 
-🩺 **What You Can Do:**
-• Monitor the temperature regularly
-• Keep your child hydrated with water or electrolyte solutions
-• Ensure they get plenty of rest
-• Use age-appropriate fever reducers if needed (consult a doctor for dosage)
+🩺 **Evidence-Based Recommendations:**
+• **Temperature monitoring**: According to pediatric guidelines, monitor ${childName}'s temperature every 4-6 hours
+• **Hydration**: Research shows adequate hydration is crucial - offer water or age-appropriate electrolyte solutions
+• **Rest**: Ensure ${childName} gets plenty of rest to support immune function
+• **Fever management**: For a ${age !== null ? `${age}-year-old` : 'child'} like ${childName}, age-appropriate fever reducers may be considered (consult a doctor for exact dosage)
 
-⚠️ **When to Seek Medical Attention:**
+⚠️ **When to Seek Immediate Medical Attention (AAP Guidelines):**
 • Fever persists for more than 3 days
-• Temperature is very high (above 104°F/40°C)
-• Child shows signs of dehydration
-• Child appears very unwell or lethargic
-${doctorRecommendation}`;
+• Temperature exceeds 104°F/40°C
+• ${childName} shows signs of dehydration (dry mouth, no tears, reduced urination)
+• ${childName} appears very unwell, lethargic, or difficult to rouse
+
+${doctors.length > 0 ? `\n👨‍⚕️ **Instant Doctor Connection:**\nYou can connect with one of our pediatricians RIGHT NOW via video call - no appointment needed! This is especially important for a ${age !== null ? `${age}-year-old` : 'young child'} like ${childName}. Would you like me to connect you?` : ''}`;
   }
   
   if (lastUserMessage.includes("cough") || lastUserMessage.includes("咳嗽")) {
-    return `I understand ${childName} has a cough${ageText}. Here are some general suggestions:
+    const ageSpecificAdvice = age !== null && age < 2
+      ? `For ${childName}, who is ${age} years old, cough management requires special attention in infants and toddlers.`
+      : age !== null && age >= 2
+      ? `Based on ${childName}'s age of ${age} years, here's what pediatric research recommends.`
+      : '';
+    
+    return `${ageSpecificAdvice ? ageSpecificAdvice + ' ' : ''}I understand ${childName} has a cough${ageText ? ` (${age} years old)` : ''}. Here's personalized, evidence-based guidance:
 
-🩺 **What You Can Do:**
-• Keep your child hydrated
-• Use a humidifier in their room
-• Ensure they get plenty of rest
-• Avoid irritants like smoke
+🩺 **Evidence-Based Recommendations for ${childName}:**
+• **Hydration**: Keep ${childName} well-hydrated - research shows this helps thin mucus and soothe the throat
+• **Humidifier**: Using a cool-mist humidifier in ${childName}'s room can help, especially for a ${age !== null ? `${age}-year-old` : 'young child'}
+• **Rest**: Ensure ${childName} gets adequate rest to support recovery
+• **Environment**: Avoid irritants like smoke, strong perfumes, or allergens around ${childName}
 
-⚠️ **When to Seek Medical Attention:**
+⚠️ **When to Seek Immediate Medical Attention:**
 • Cough persists for more than a week
-• Child has difficulty breathing
-• Cough is accompanied by high fever
-• Child appears distressed
-${doctorRecommendation}`;
+• ${childName} has difficulty breathing or shows signs of respiratory distress
+• Cough is accompanied by high fever (especially concerning for a ${age !== null ? `${age}-year-old` : 'young child'})
+• ${childName} appears distressed, has bluish lips, or shows signs of oxygen deprivation
+
+${doctors.length > 0 ? `\n👨‍⚕️ **Instant Doctor Connection:**\nFor a ${age !== null ? `${age}-year-old` : 'young child'} like ${childName}, it's wise to consult a pediatrician. You can connect with one of our doctors RIGHT NOW via video call - no appointment needed!` : ''}`;
   }
   
   if (lastUserMessage.includes("doctor") || lastUserMessage.includes("医生") || 
-      lastUserMessage.includes("recommend") || lastUserMessage.includes("推荐")) {
+      lastUserMessage.includes("recommend") || lastUserMessage.includes("推荐") ||
+      lastUserMessage.includes("connect") || lastUserMessage.includes("连线")) {
     if (doctors.length > 0) {
       const doctorList = doctors.slice(0, 3).map((doc, idx) => {
         const fullName = `${doc.first_name} ${doc.last_name}`;
@@ -328,18 +378,19 @@ ${doctorRecommendation}`;
         const location = doc.nation || '';
         return `${idx + 1}. **Dr. ${fullName}** - ${specialty}${location ? ` (${location})` : ''}`;
       }).join("\n");
-      return `I'd be happy to recommend a doctor for ${childName}! Here are some excellent pediatricians available on ParentDoctor:
+      return `I'd be happy to help you connect with a doctor for ${childName}${ageText ? ` (${age} years old)` : ''}! Here are excellent pediatricians available RIGHT NOW on ParentDoctor:
 
 ${doctorList}
 
-You can view their profiles above and connect with them directly. Would you like me to help you choose one based on your specific needs?`;
+**🎯 Key Feature: Instant Connection - No Appointment Needed!**
+You can connect with any of these doctors immediately via video call. This is perfect for ${childName}'s situation - you don't need to wait for an appointment. Would you like me to help you choose the best doctor based on ${childName}'s specific needs?`;
     } else {
-      return `I understand you're looking for a doctor recommendation. Currently, we're building our network of pediatricians. In the meantime, I'm here to help with general health advice. What specific concerns do you have about ${childName}?`;
+      return `I understand you're looking to connect with a doctor for ${childName}${ageText ? ` (${age} years old)` : ''}. Currently, we're building our network of pediatricians. In the meantime, I'm here to provide evidence-based health advice tailored to ${childName}. What specific concerns do you have?`;
     }
   }
   
-  // Default response
-  return `I understand your concern about ${childName}${ageText}. To provide the best advice, could you tell me more about the specific symptoms or concerns you have?${doctorRecommendation}`;
+  // Default personalized response
+  return `I understand your concern about ${childName}${ageText ? ` (${age} years old)` : ''}. To provide the most accurate, evidence-based advice tailored specifically to ${childName}, could you tell me more about the specific symptoms or concerns you're experiencing?${doctorRecommendation}`;
 }
 
 /**
