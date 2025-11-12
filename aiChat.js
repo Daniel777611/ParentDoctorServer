@@ -357,53 +357,92 @@ function extractChildInfo(messages) {
   const fullText = messages.map(m => m.content).join(" ");
   const lowerText = fullText.toLowerCase();
   
-  // Extract name (supports English and Chinese)
-  // English patterns
-  const namePatternsEn = [
-    /(?:my child|child|kid|baby|son|daughter) (?:is|named|called|name is) ([a-z\u4e00-\u9fa5]+)/i,
-    /(?:name is|named|called) ([a-z\u4e00-\u9fa5]+)/i,
-    /(?:他|她|孩子|宝宝|儿子|女儿) (?:叫|名字是|名字叫) ([a-z\u4e00-\u9fa5]+)/i,
-    /(?:叫|名字是|名字叫) ([a-z\u4e00-\u9fa5]+)/i
+  // Extract name (supports English and Chinese, more patterns)
+  const namePatterns = [
+    // English patterns
+    /(?:my child|child|kid|baby|son|daughter) (?:is|named|called|name is) ([a-z\u4e00-\u9fa5\s]+)/i,
+    /(?:name is|named|called) ([a-z\u4e00-\u9fa5\s]+)/i,
+    /(?:his|her) name (?:is|is called) ([a-z\u4e00-\u9fa5\s]+)/i,
+    // Chinese patterns
+    /(?:他|她|孩子|宝宝|儿子|女儿) (?:叫|名字是|名字叫|姓名是) ([a-z\u4e00-\u9fa5\s]+)/i,
+    /(?:叫|名字是|名字叫|姓名是) ([a-z\u4e00-\u9fa5\s]+)/i,
+    // Direct mention: "X is my child" or "我的孩子是X"
+    /^([a-z\u4e00-\u9fa5]+) (?:is|是) (?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿)/i,
+    /(?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿) (?:is|是) ([a-z\u4e00-\u9fa5]+)/i
   ];
   
-  for (const pattern of namePatternsEn) {
+  for (const pattern of namePatterns) {
     const match = fullText.match(pattern);
-    if (match && match[1] && match[1].length >= 1 && match[1].length <= 20) {
-      // Capitalize first letter for English names, keep Chinese as is
-      const name = match[1];
-      info.child_name = /^[a-z]/.test(name) ? name.charAt(0).toUpperCase() + name.slice(1) : name;
-      break;
+    if (match && match[1]) {
+      let name = match[1].trim();
+      // Remove common words that might be captured
+      name = name.replace(/\b(and|or|the|a|an|is|are|was|were|的|和|或)\b/gi, '').trim();
+      
+      if (name.length >= 1 && name.length <= 20 && !/^\d+$/.test(name)) {
+        // Capitalize first letter for English names, keep Chinese as is
+        info.child_name = /^[a-z]/.test(name) ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+        console.log(`👶 Extracted child name: ${info.child_name}`);
+        break;
+      }
     }
   }
   
   // Extract date of birth or age (supports multiple formats)
   const dobPatterns = [
-    // Date formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY
-    /(?:born|birthday|date of birth|dob|出生|生日) (?:on|is|是|在)?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/i,
-    /(\d{4}[-/]\d{1,2}[-/]\d{1,2})/,
-    // Age patterns
+    // Date formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY, YYYY/MM/DD
+    /(?:born|birthday|date of birth|dob|出生|生日|出生日期) (?:on|is|是|在)?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/i,
+    /(?:出生于|生日是|出生在)\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/i,
+    // Standalone date patterns (more specific)
+    /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2})\b/,
+    // Age patterns (more comprehensive)
     /(?:age|年龄) (?:is|of|是)?\s*(\d+)/i,
+    /(?:今年|现在|已经) (\d+) (?:岁|years? old)/i,
     /(\d+) (?:years?|months?|days?|岁|个月|天) (?:old|age)?/i,
-    /(?:今年|现在) (\d+) (?:岁|years? old)/i,
-    /(\d+) (?:岁|years? old)/i
+    /(\d+) (?:岁|years? old)/i,
+    /(?:孩子|宝宝|儿子|女儿) (\d+) (?:岁|years? old)/i
   ];
   
   for (const pattern of dobPatterns) {
     const match = fullText.match(pattern);
     if (match && match[1]) {
-      const value = match[1];
-      // If it's an age, convert to approximate date of birth
-      if (/^\d+$/.test(value) && parseInt(value) < 25) {
-        const age = parseInt(value);
-        const today = new Date();
-        const birthYear = today.getFullYear() - age;
-        // Use January 1st as approximate date
-        info.date_of_birth = `${birthYear}-01-01`;
+      const value = match[1].trim();
+      // If it's an age (just a number between 0-25), convert to approximate date of birth
+      if (/^\d+$/.test(value)) {
+        const ageNum = parseInt(value);
+        if (ageNum >= 0 && ageNum <= 25) {
+          const today = new Date();
+          const birthYear = today.getFullYear() - ageNum;
+          // Use January 1st as approximate date
+          info.date_of_birth = `${birthYear}-01-01`;
+          console.log(`📅 Extracted age ${ageNum}, calculated birth year: ${birthYear}`);
+          break;
+        }
       } else if (value.includes('-') || value.includes('/')) {
-        // It's a date
-        info.date_of_birth = value.replace(/\//g, '-');
+        // It's a date - normalize format
+        let normalizedDate = value.replace(/\//g, '-');
+        // Ensure YYYY-MM-DD format
+        const parts = normalizedDate.split('-');
+        if (parts.length === 3) {
+          // If first part is 4 digits, it's YYYY-MM-DD
+          if (parts[0].length === 4) {
+            info.date_of_birth = normalizedDate;
+          } else {
+            // Might be MM-DD-YYYY or DD-MM-YYYY, try to parse
+            const yearIdx = parts.findIndex(p => p.length === 4);
+            if (yearIdx >= 0) {
+              // Reorder to YYYY-MM-DD
+              const year = parts[yearIdx];
+              const month = yearIdx === 0 ? parts[1] : parts[0];
+              const day = yearIdx === 2 ? parts[1] : parts[2];
+              info.date_of_birth = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            } else {
+              info.date_of_birth = normalizedDate;
+            }
+          }
+          console.log(`📅 Extracted date of birth: ${info.date_of_birth}`);
+          break;
+        }
       }
-      break;
     }
   }
   
