@@ -126,6 +126,109 @@
       font-weight: 500;
     }
     
+    /* Incoming Call Overlay */
+    .incoming-call-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .incoming-call-content {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+    .incoming-call-avatar {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: 600;
+      margin: 0 auto 20px;
+      border: 4px solid var(--success);
+    }
+    .incoming-call-avatar img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .incoming-call-info {
+      margin-bottom: 30px;
+    }
+    .incoming-call-name {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .incoming-call-status {
+      font-size: 16px;
+      color: var(--muted);
+    }
+    .incoming-call-buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+    }
+    .call-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 24px;
+      font-weight: 600;
+      transition: transform 0.2s, opacity 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .call-btn:hover {
+      transform: scale(1.1);
+    }
+    .call-btn:active {
+      transform: scale(0.95);
+    }
+    .call-btn.reject-btn {
+      background: #ef4444;
+      color: #fff;
+    }
+    .call-btn.accept-btn {
+      background: var(--success);
+      color: #fff;
+    }
+    .call-btn-icon {
+      font-size: 32px;
+      margin-bottom: 4px;
+    }
+    .call-btn-label {
+      font-size: 12px;
+      font-weight: 500;
+    }
+    
     /* Connected State - Doctor Info */
     .doctor-header {
       padding: 20px;
@@ -634,6 +737,29 @@
         <!-- Waiting State: Video Call Area -->
         <div class="video-call-area waiting" id="videoCallArea">
           <div class="waiting-text" id="waitingText">Waiting for video call</div>
+        </div>
+        
+        <!-- Incoming Call Notification -->
+        <div class="incoming-call-overlay" id="incomingCallOverlay" style="display: none;">
+          <div class="incoming-call-content">
+            <div class="incoming-call-avatar" id="incomingCallAvatar">
+              <span id="incomingCallInitials">P</span>
+            </div>
+            <div class="incoming-call-info">
+              <div class="incoming-call-name" id="incomingCallName">Incoming Call</div>
+              <div class="incoming-call-status" id="incomingCallStatus">Parent is calling...</div>
+            </div>
+            <div class="incoming-call-buttons">
+              <button class="call-btn reject-btn" id="rejectCallBtn">
+                <span class="call-btn-icon">✕</span>
+                <span class="call-btn-label">Reject</span>
+              </button>
+              <button class="call-btn accept-btn" id="acceptCallBtn">
+                <span class="call-btn-icon">✓</span>
+                <span class="call-btn-label">Accept</span>
+              </button>
+            </div>
+          </div>
         </div>
         
         <!-- Connected State: Doctor Header -->
