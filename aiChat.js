@@ -631,12 +631,6 @@ async function handleChatMessage(familyId, userMessage) {
       console.log(`📋 Current child record:`, mergedInfo);
     }
     
-    // Return extracted info if we saved anything
-    const hasAnyNewInfo = extractedInfo.child_name || 
-                         extractedInfo.date_of_birth || 
-                         extractedInfo.gender || 
-                         extractedInfo.medical_record;
-    
     return {
       response: aiResponse,
       extractedInfo: hasAnyNewInfo ? extractedInfo : null
