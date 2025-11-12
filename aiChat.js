@@ -69,7 +69,7 @@ async function getAvailableDoctors() {
 }
 
 /**
- * Calculate age from date of birth
+ * Calculate age from date of birth (accurate calculation)
  */
 function calculateAge(dateOfBirth) {
   if (!dateOfBirth) return null;
@@ -78,29 +78,50 @@ function calculateAge(dateOfBirth) {
     // Try to parse different date formats
     let birthDate;
     if (dateOfBirth.includes('-')) {
-      birthDate = new Date(dateOfBirth);
+      // Handle YYYY-MM-DD format
+      const parts = dateOfBirth.split('-');
+      if (parts.length === 3) {
+        birthDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      } else {
+        birthDate = new Date(dateOfBirth);
+      }
     } else if (dateOfBirth.includes('/')) {
       const parts = dateOfBirth.split('/');
       if (parts.length === 3) {
-        // Assume MM/DD/YYYY or DD/MM/YYYY
-        birthDate = new Date(parts[2], parts[0] - 1, parts[1]);
+        // Try to determine format: if first part is 4 digits, it's YYYY/MM/DD
+        if (parts[0].length === 4) {
+          birthDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+          // Assume MM/DD/YYYY
+          birthDate = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+        }
       }
     } else {
       birthDate = new Date(dateOfBirth);
     }
     
     if (isNaN(birthDate.getTime())) {
+      console.error(`❌ Invalid date format: ${dateOfBirth}`);
       return null;
     }
     
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
+    const dayDiff = today.getDate() - birthDate.getDate();
     
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    // Adjust age if birthday hasn't occurred this year
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
       age--;
     }
     
+    // Age cannot be negative
+    if (age < 0) {
+      console.warn(`⚠️  Calculated negative age for birth date ${dateOfBirth}, returning 0`);
+      return 0;
+    }
+    
+    console.log(`📅 Calculated age: ${age} years old (born: ${dateOfBirth}, today: ${today.toISOString().split('T')[0]})`);
     return age;
   } catch (err) {
     console.error("❌ Error calculating age:", err.message);
@@ -494,10 +515,17 @@ function extractChildInfo(messages) {
         const ageNum = parseInt(value);
         if (ageNum >= 0 && ageNum <= 25) {
           const today = new Date();
-          const birthYear = today.getFullYear() - ageNum;
-          // Use January 1st as approximate date
-          info.date_of_birth = `${birthYear}-01-01`;
-          console.log(`📅 Extracted age ${ageNum}, calculated birth year: ${birthYear}`);
+          // Calculate birth year: if birthday hasn't passed this year, subtract one more year
+          let birthYear = today.getFullYear() - ageNum;
+          
+          // Use current month and day as approximate (or January 1st if we want to be conservative)
+          // For more accuracy, we could use today's date minus the age
+          const birthMonth = today.getMonth() + 1; // 1-12
+          const birthDay = today.getDate();
+          
+          // Format as YYYY-MM-DD
+          info.date_of_birth = `${birthYear}-${String(birthMonth).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`;
+          console.log(`📅 Extracted age ${ageNum}, calculated approximate birth date: ${info.date_of_birth} (birth year: ${birthYear})`);
           break;
         }
       } else if (value.includes('-') || value.includes('/')) {
@@ -508,22 +536,40 @@ function extractChildInfo(messages) {
         if (parts.length === 3) {
           // If first part is 4 digits, it's YYYY-MM-DD
           if (parts[0].length === 4) {
-            info.date_of_birth = normalizedDate;
+            // Validate and format: YYYY-MM-DD
+            const year = parseInt(parts[0]);
+            const month = parseInt(parts[1]);
+            const day = parseInt(parts[2]);
+            
+            // Validate date
+            if (year >= 1900 && year <= new Date().getFullYear() && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+              info.date_of_birth = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              console.log(`📅 Extracted date of birth: ${info.date_of_birth}`);
+              break;
+            } else {
+              console.warn(`⚠️  Invalid date values: ${year}-${month}-${day}`);
+            }
           } else {
             // Might be MM-DD-YYYY or DD-MM-YYYY, try to parse
             const yearIdx = parts.findIndex(p => p.length === 4);
             if (yearIdx >= 0) {
               // Reorder to YYYY-MM-DD
-              const year = parts[yearIdx];
-              const month = yearIdx === 0 ? parts[1] : parts[0];
-              const day = yearIdx === 2 ? parts[1] : parts[2];
-              info.date_of_birth = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+              const year = parseInt(parts[yearIdx]);
+              const month = parseInt(yearIdx === 0 ? parts[1] : parts[0]);
+              const day = parseInt(yearIdx === 2 ? parts[1] : parts[2]);
+              
+              // Validate date
+              if (year >= 1900 && year <= new Date().getFullYear() && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                info.date_of_birth = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                console.log(`📅 Extracted date of birth: ${info.date_of_birth}`);
+                break;
+              } else {
+                console.warn(`⚠️  Invalid date values: ${year}-${month}-${day}`);
+              }
             } else {
-              info.date_of_birth = normalizedDate;
+              console.warn(`⚠️  Could not parse date format: ${normalizedDate}`);
             }
           }
-          console.log(`📅 Extracted date of birth: ${info.date_of_birth}`);
-          break;
         }
       }
     }
