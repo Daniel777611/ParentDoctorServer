@@ -270,6 +270,76 @@ function calculateAge(dateOfBirth) {
 }
 
 /**
+ * Get child development stage based on age
+ * Returns development stage information in both Chinese and English
+ */
+function getDevelopmentStage(ageInfo) {
+  if (!ageInfo || (ageInfo.years === null && ageInfo.months === null && ageInfo.days === null)) {
+    return null;
+  }
+  
+  const totalDays = (ageInfo.years || 0) * 365 + (ageInfo.months || 0) * 30 + (ageInfo.days || 0);
+  const totalMonths = (ageInfo.years || 0) * 12 + (ageInfo.months || 0);
+  
+  let stage = null;
+  let stageDescription = null;
+  let stageDescriptionEn = null;
+  
+  if (totalDays < 28) {
+    stage = "newborn";
+    stageDescription = "新生儿期（0-28天）";
+    stageDescriptionEn = "Newborn period (0-28 days)";
+  } else if (totalMonths < 2) {
+    stage = "early_infancy";
+    stageDescription = "早期婴儿期（1-2个月）";
+    stageDescriptionEn = "Early infancy (1-2 months)";
+  } else if (totalMonths < 6) {
+    stage = "infancy";
+    stageDescription = "婴儿期（2-6个月）";
+    stageDescriptionEn = "Infancy (2-6 months)";
+  } else if (totalMonths < 12) {
+    stage = "late_infancy";
+    stageDescription = "晚期婴儿期（6-12个月）";
+    stageDescriptionEn = "Late infancy (6-12 months)";
+  } else if (ageInfo.years < 2) {
+    stage = "toddler";
+    stageDescription = "幼儿期（1-2岁）";
+    stageDescriptionEn = "Toddler period (1-2 years)";
+  } else if (ageInfo.years < 3) {
+    stage = "early_preschool";
+    stageDescription = "学龄前期早期（2-3岁）";
+    stageDescriptionEn = "Early preschool (2-3 years)";
+  } else if (ageInfo.years < 5) {
+    stage = "preschool";
+    stageDescription = "学龄前期（3-5岁）";
+    stageDescriptionEn = "Preschool period (3-5 years)";
+  } else if (ageInfo.years < 7) {
+    stage = "early_school";
+    stageDescription = "学龄期早期（5-7岁）";
+    stageDescriptionEn = "Early school age (5-7 years)";
+  } else if (ageInfo.years < 12) {
+    stage = "school_age";
+    stageDescription = "学龄期（7-12岁）";
+    stageDescriptionEn = "School age (7-12 years)";
+  } else {
+    stage = "adolescent";
+    stageDescription = "青春期（12岁以上）";
+    stageDescriptionEn = "Adolescent period (12+ years)";
+  }
+  
+  return {
+    stage,
+    stageDescription,
+    stageDescriptionEn,
+    totalDays,
+    totalMonths,
+    years: ageInfo.years || 0,
+    months: ageInfo.months || 0,
+    days: ageInfo.days || 0
+  };
+}
+
+/**
  * Build system prompt for AI assistant
  */
 async function buildSystemPrompt(familyId) {
@@ -319,7 +389,8 @@ You need to know these things about the child to give better advice:
 - Use simple language, avoid medical jargon unless necessary
 - Show empathy and understanding
 - When you know the child's name, use it naturally in your responses
-- When you know their age, mention it when relevant (e.g., "For a 5-year-old like [name]...")
+- **ALWAYS mention the child's development stage when explaining symptoms**: "According to the calculated age, [name] is in the [stage] stage. During this stage, [explain why symptoms occur]..."
+- When explaining symptoms, connect them to the child's developmental stage to show professionalism
 - Keep responses helpful but not overwhelming
 - If you don't have the child's information yet, naturally ask for it during the conversation
 
@@ -379,7 +450,14 @@ You need to know these things about the child to give better advice:
         ? `${finalAge.months} month${finalAge.months > 1 ? 's' : ''}${finalAge.days > 0 ? `, ${finalAge.days} day${finalAge.days > 1 ? 's' : ''}` : ''} old`
         : `${finalAge.days} day${finalAge.days > 1 ? 's' : ''} old`;
       
+      // Get development stage
+      const devStage = getDevelopmentStage(finalAge);
+      
       prompt += `- **Age: ${ageText}** (${ageTextEnglish}) - Born: ${childInfo.date_of_birth || 'date calculated from age'}\n`;
+      if (devStage) {
+        prompt += `- **Development Stage: ${devStage.stageDescription} (${devStage.stageDescriptionEn})**\n`;
+        prompt += `  **CRITICAL**: When explaining symptoms or giving advice, ALWAYS mention that ${childName || 'the child'} is in the ${devStage.stageDescriptionEn} stage. Explain WHY symptoms occur based on this developmental stage. For example: "According to the calculated age, ${childName || 'your child'} is in the ${devStage.stageDescriptionEn} stage. During this stage, [explain why symptoms occur based on development]..."\n`;
+      }
       prompt += `  **IMPORTANT**: Use this EXACT age information (${ageText}) when giving advice. For example: "For ${childName} who is ${ageText}, I recommend..." or "Since ${childName} is ${ageText}, this is important because..."\n`;
     } else if (childInfo.date_of_birth) {
       prompt += `- **Date of Birth: ${childInfo.date_of_birth}** - Age calculation pending\n`;
@@ -397,14 +475,23 @@ You need to know these things about the child to give better advice:
       prompt += `- Previous Medical Notes: ${childInfo.medical_record}\n`;
     }
     
-    // Add personalized response examples with accurate age
+    // Add personalized response examples with accurate age and development stage
     if (childName && finalAge) {
       const ageText = `${finalAge.years}岁${finalAge.months}个月${finalAge.days}天`;
-      prompt += `\n**EXAMPLE PERSONALIZED RESPONSES (use the exact age ${ageText}):**
+      const devStage = getDevelopmentStage(finalAge);
+      
+      if (devStage) {
+        prompt += `\n**EXAMPLE PROFESSIONAL RESPONSES (use the exact age ${ageText} and development stage):**
+- "According to the calculated age, ${childName} is ${ageText} old and is in the ${devStage.stageDescriptionEn} stage. During this developmental stage, [explain why symptoms occur]. Therefore, I recommend..."
+- "Since ${childName} is ${ageText} and in the ${devStage.stageDescriptionEn} stage, this symptom is common because [developmental reason]. Here's what you can do..."
+- "For ${childName} who is ${ageText} (${devStage.stageDescriptionEn}), these symptoms occur because [developmental explanation]. Based on this stage, I suggest..."
+- "Given that ${childName} is in the ${devStage.stageDescriptionEn} stage (${ageText}), this is important because [developmental reason]..."`;
+      } else {
+        prompt += `\n**EXAMPLE PERSONALIZED RESPONSES (use the exact age ${ageText}):**
 - "For ${childName} who is ${ageText}, I recommend..."
 - "Since ${childName} is ${ageText}, this is important because..."
-- "Given that ${childName} is ${ageText}, here's what you should know..."
-- "For a ${finalAge.years > 0 ? `${finalAge.years}-year-old` : finalAge.months > 0 ? `${finalAge.months}-month-old` : `${finalAge.days}-day-old`} like ${childName}..."`;
+- "Given that ${childName} is ${ageText}, here's what you should know..."`;
+      }
     }
   } else {
     prompt += `No child information in database yet. Gather this information naturally during conversation, then ALWAYS use it in subsequent responses.`;
@@ -556,7 +643,12 @@ ${doctors.length > 0 ? `If you're worried, you can connect with one of our pedia
   }
   
   if (lastUserMessage.includes("cough") || lastUserMessage.includes("咳嗽")) {
-    return `I hear ${childName} has a cough${ageText ? ` - and ${childName} is ${age} years old` : ''}. Here are some things that usually help:
+    let stageContext = '';
+    if (devStage) {
+      stageContext = ` According to the calculated age, ${childName} is ${devStage.years}岁${devStage.months}个月${devStage.days}天 old and is in the ${devStage.stageDescriptionEn} stage. During this stage, coughing can be common because the respiratory system is still maturing and children are more susceptible to respiratory infections.`;
+    }
+    
+    return `I hear ${childName} has a cough${ageText ? ` - and ${childName} is ${age} years old` : ''}.${stageContext} Here are some things that usually help:
 
 • **Keep ${childName} hydrated** - Drinking water helps thin out the mucus and makes the cough less annoying
 • **Try a humidifier** - Adding some moisture to the air can help, especially at night
