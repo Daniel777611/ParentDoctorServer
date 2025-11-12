@@ -1212,12 +1212,15 @@ app.post("/api/parent/verify/send-code", async (req, res) => {
     }
     
     // Check if already registered (check in family_member table)
+    // Only check for active members (not soft-deleted)
     if (email) {
       const { rows } = await pool.query(
         "SELECT family_id FROM family_member WHERE lower(email) = $1 LIMIT 1", 
         [email]
       );
       if (rows.length > 0) {
+        // Log for debugging
+        console.log(`⚠️  Email ${email} already exists in family_member table`);
         return res.status(400).json({ success: false, message: "This email is already registered." });
       }
     }
@@ -1551,8 +1554,20 @@ app.post("/api/parent/login/verify-code", async (req, res) => {
     const identifier = (email || "").trim().toLowerCase() || phone;
     const stored = verificationCodes.get(`parent_login_${identifier}`);
     
-    if (!stored || Date.now() > stored.expiresAt || stored.code !== code) {
-      return res.status(400).json({ success: false, message: "Invalid or expired verification code." });
+    if (!stored) {
+      console.log(`⚠️  No verification code found for ${identifier}`);
+      return res.status(400).json({ success: false, message: "Verification code not found. Please request a new code." });
+    }
+    
+    if (Date.now() > stored.expiresAt) {
+      verificationCodes.delete(`parent_login_${identifier}`);
+      console.log(`⚠️  Verification code expired for ${identifier}`);
+      return res.status(400).json({ success: false, message: "Verification code has expired. Please request a new code." });
+    }
+    
+    if (stored.code !== code) {
+      console.log(`⚠️  Invalid verification code for ${identifier}. Expected: ${stored.code}, Got: ${code}`);
+      return res.status(400).json({ success: false, message: "Invalid verification code. Please check and try again." });
     }
     
     // Find member by email or phone
