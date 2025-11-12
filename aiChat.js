@@ -615,7 +615,7 @@ async function saveChildInfo(familyId, childInfo) {
     console.error("❌ Error saving child info:", err.message);
     console.error("❌ Error stack:", err.stack);
     // Don't throw - allow the chat to continue even if save fails
-    throw err; // Actually throw it so we can see the error in logs
+    // But log the error so we can debug
   }
 }
 
