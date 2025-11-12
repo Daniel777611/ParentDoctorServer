@@ -271,14 +271,36 @@ app.get("/api/doctors", async (_req, res) => {
 // ✅ Get All Families (Parents)
 app.get("/api/admin/families", async (_req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT f.*, 
-        (SELECT json_agg(m.*) FROM family_member m WHERE m.family_id = f.family_id) as members,
-        (SELECT json_agg(c.*) FROM child c WHERE c.family_id = f.family_id) as children
-      FROM family f 
-      ORDER BY f.created_at DESC
+    // First get all families
+    const { rows: families } = await pool.query(`
+      SELECT * FROM family 
+      ORDER BY created_at DESC
     `);
-    res.json({ success: true, count: result.rows.length, data: result.rows });
+    
+    // Then get members and children for each family
+    const familiesWithDetails = await Promise.all(
+      families.map(async (family) => {
+        // Get members
+        const { rows: members } = await pool.query(
+          `SELECT * FROM family_member WHERE family_id = $1 ORDER BY created_at ASC`,
+          [family.family_id]
+        );
+        
+        // Get children
+        const { rows: children } = await pool.query(
+          `SELECT * FROM child WHERE family_id = $1 ORDER BY created_at ASC`,
+          [family.family_id]
+        );
+        
+        return {
+          ...family,
+          members: members,
+          children: children
+        };
+      })
+    );
+    
+    res.json({ success: true, count: familiesWithDetails.length, data: familiesWithDetails });
   } catch (err) {
     console.error("❌ Error fetching families:", err.message);
     res.status(500).json({ success: false, error: err.message });
