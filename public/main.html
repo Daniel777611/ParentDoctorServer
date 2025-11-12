@@ -1492,7 +1492,16 @@
     
     // Get doctor ID from session
     const doctorData = JSON.parse(sessionStorage.getItem('doctorData') || '{}');
-    doctorId = doctorData.doctor_id || null;
+    console.log('🔍 Raw doctorData from sessionStorage:', doctorData);
+    // Try multiple possible field names
+    doctorId = doctorData.doctor_id || doctorData.doctorId || doctorData.id || null;
+    console.log('🔍 Extracted doctorId:', doctorId);
+    
+    // If still no ID, log all keys for debugging
+    if (!doctorId && Object.keys(doctorData).length > 0) {
+      console.error('❌ Doctor ID not found! Available keys:', Object.keys(doctorData));
+      console.error('❌ Full doctorData:', JSON.stringify(doctorData, null, 2));
+    }
     
     function connectWebSocket() {
       if (!doctorId) {
