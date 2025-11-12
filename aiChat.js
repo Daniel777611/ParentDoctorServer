@@ -95,6 +95,47 @@ async function callAI(messages, familyId) {
   }
 
   try {
+    // Use Node.js built-in fetch (available in Node 18+) or require https/http
+    let fetch;
+    if (typeof globalThis.fetch !== 'undefined') {
+      fetch = globalThis.fetch;
+    } else {
+      // Fallback for older Node.js versions
+      const https = require('https');
+      const http = require('http');
+      const { URL } = require('url');
+      fetch = async (url, options) => {
+        return new Promise((resolve, reject) => {
+          const urlObj = new URL(url);
+          const lib = urlObj.protocol === 'https:' ? https : http;
+          const data = JSON.stringify(options.body);
+          
+          const req = lib.request({
+            hostname: urlObj.hostname,
+            port: urlObj.port,
+            path: urlObj.pathname,
+            method: options.method || 'GET',
+            headers: options.headers || {}
+          }, (res) => {
+            let body = '';
+            res.on('data', (chunk) => body += chunk);
+            res.on('end', () => {
+              resolve({
+                ok: res.statusCode >= 200 && res.statusCode < 300,
+                status: res.statusCode,
+                json: async () => JSON.parse(body),
+                text: async () => body
+              });
+            });
+          });
+          
+          req.on('error', reject);
+          if (data) req.write(data);
+          req.end();
+        });
+      };
+    }
+    
     const response = await fetch(OPENAI_API_URL, {
       method: "POST",
       headers: {
