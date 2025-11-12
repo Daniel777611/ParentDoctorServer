@@ -766,6 +766,12 @@
           </div>
         </div>
         
+        <!-- Connected State: Video Streams -->
+        <div class="connected-video-container" id="connectedVideoContainer" style="display: none; position: relative; width: 100%; height: 100%; background: #000;">
+          <video id="remoteVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; background: #000;"></video>
+          <video id="localVideo" autoplay playsinline muted style="position: absolute; bottom: 20px; right: 20px; width: 200px; height: 150px; object-fit: cover; border-radius: 8px; border: 2px solid #fff; background: #000; z-index: 10;"></video>
+        </div>
+        
         <!-- Connected State: Doctor Header -->
         <div class="doctor-header" id="doctorHeader">
           <div class="doctor-avatar" id="doctorAvatar">
@@ -1510,6 +1516,11 @@
     let currentCallOffer = null;
     let currentCallFrom = null;
     
+    // WebRTC variables
+    let peerConnection = null;
+    let localStream = null;
+    let remoteStream = null;
+    
     // Get doctor ID from the doctorData already loaded above (line ~1195-1215)
     // doctorData is already available in this scope
     console.log('🔍 Getting doctorId from doctorData:', doctorData);
@@ -1614,6 +1625,21 @@
               } else if (msg.payload.candidate) {
                 // ICE candidate received
                 console.log('🧊 ICE candidate received');
+                if (peerConnection) {
+                  try {
+                    const candidate = new RTCIceCandidate({
+                      candidate: msg.payload.candidate.candidate,
+                      sdpMLineIndex: msg.payload.candidate.sdpMLineIndex,
+                      sdpMid: msg.payload.candidate.sdpMid
+                    });
+                    await peerConnection.addIceCandidate(candidate);
+                    console.log('✅ ICE candidate added');
+                  } catch (error) {
+                    console.error('❌ Error adding ICE candidate:', error);
+                  }
+                } else {
+                  console.warn('⚠️ PeerConnection not ready for ICE candidate');
+                }
               } else if (msg.payload.reject) {
                 console.log('❌ Call rejected by caller');
               }
@@ -1674,7 +1700,7 @@
       console.log('✅ Incoming call overlay displayed');
     }
     
-    function acceptCall() {
+    async function acceptCall() {
       if (!currentCallOffer || !currentCallFrom) {
         console.error('❌ No call offer to accept');
         return;
@@ -1685,29 +1711,109 @@
       // Hide incoming call overlay
       document.getElementById('incomingCallOverlay').style.display = 'none';
       
-      // TODO: Create WebRTC answer and send it back
-      // For now, just set state to connected
-      setState(true);
-      
-      // Send answer back (simplified - you'll need to implement full WebRTC answer)
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        // This is a placeholder - you'll need to create actual WebRTC answer
-        ws.send(JSON.stringify({
-          type: 'signal',
-          from: doctorId,
-          to: currentCallFrom,
-          payload: {
-            answer: {
-              type: 'answer',
-              sdp: 'placeholder-sdp' // Replace with actual SDP
+      try {
+        // Get local media stream (camera and microphone)
+        console.log('🎥 Requesting local media stream...');
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        console.log('✅ Local media stream obtained');
+        
+        // Display local video
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) {
+          localVideo.srcObject = localStream;
+          localVideo.play();
+          console.log('✅ Local video displayed');
+        }
+        
+        // Create RTCPeerConnection
+        const configuration = {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        };
+        peerConnection = new RTCPeerConnection(configuration);
+        console.log('✅ RTCPeerConnection created');
+        
+        // Add local stream tracks to peer connection
+        localStream.getTracks().forEach(track => {
+          peerConnection.addTrack(track, localStream);
+          console.log('✅ Added local track:', track.kind);
+        });
+        
+        // Handle remote stream
+        peerConnection.ontrack = (event) => {
+          console.log('📹 Remote track received:', event.track.kind);
+          remoteStream = event.streams[0];
+          const remoteVideo = document.getElementById('remoteVideo');
+          if (remoteVideo) {
+            remoteVideo.srcObject = remoteStream;
+            remoteVideo.play();
+            console.log('✅ Remote video displayed');
+          }
+        };
+        
+        // Handle ICE candidates
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            console.log('🧊 Sending ICE candidate');
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'signal',
+                from: doctorId,
+                to: currentCallFrom,
+                payload: {
+                  candidate: {
+                    candidate: event.candidate.candidate,
+                    sdpMLineIndex: event.candidate.sdpMLineIndex,
+                    sdpMid: event.candidate.sdpMid
+                  }
+                }
+              }));
             }
           }
-        }));
+        };
+        
+        // Set remote description (offer)
+        console.log('📥 Setting remote description (offer)...');
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(currentCallOffer));
+        console.log('✅ Remote description set');
+        
+        // Create answer
+        console.log('📤 Creating answer...');
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        console.log('✅ Answer created and set as local description');
+        
+        // Send answer
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'signal',
+            from: doctorId,
+            to: currentCallFrom,
+            payload: {
+              answer: {
+                type: 'answer',
+                sdp: answer.sdp
+              }
+            }
+          }));
+          console.log('✅ Answer sent');
+        }
+        
+        // Set state to connected
+        setState(true);
+        
+        // Clear call data
+        currentCallOffer = null;
+        currentCallFrom = null;
+      } catch (error) {
+        console.error('❌ Error accepting call:', error);
+        alert('Failed to accept call: ' + error.message);
       }
-      
-      // Clear call data
-      currentCallOffer = null;
-      currentCallFrom = null;
     }
     
     function rejectCall() {
