@@ -1510,9 +1510,10 @@
     let currentCallOffer = null;
     let currentCallFrom = null;
     
-    // Get doctor ID from session
-    const doctorData = JSON.parse(sessionStorage.getItem('doctorData') || '{}');
-    console.log('🔍 Raw doctorData from sessionStorage:', doctorData);
+    // Get doctor ID from the doctorData already loaded above (line ~1195-1215)
+    // doctorData is already available in this scope
+    console.log('🔍 Getting doctorId from doctorData:', doctorData);
+    console.log('🔍 doctorData keys:', Object.keys(doctorData));
     // Try multiple possible field names
     doctorId = doctorData.doctor_id || doctorData.doctorId || doctorData.id || null;
     console.log('🔍 Extracted doctorId:', doctorId);
@@ -1521,6 +1522,21 @@
     if (!doctorId && Object.keys(doctorData).length > 0) {
       console.error('❌ Doctor ID not found! Available keys:', Object.keys(doctorData));
       console.error('❌ Full doctorData:', JSON.stringify(doctorData, null, 2));
+    } else if (!doctorId) {
+      console.error('❌ No doctorData found!');
+      console.error('❌ sessionStorage doctorData:', sessionStorage.getItem('doctorData'));
+      console.error('❌ sessionStorage doctorLoggedIn:', sessionStorage.getItem('doctorLoggedIn'));
+      // Try to reload doctorData one more time
+      try {
+        const reloadedData = JSON.parse(sessionStorage.getItem('doctorData') || '{}');
+        console.log('🔄 Reloaded doctorData:', reloadedData);
+        doctorId = reloadedData.doctor_id || reloadedData.doctorId || reloadedData.id || null;
+        if (doctorId) {
+          console.log('✅ Found doctorId after reload:', doctorId);
+        }
+      } catch (e) {
+        console.error('❌ Error reloading doctorData:', e);
+      }
     }
     
     function connectWebSocket() {
