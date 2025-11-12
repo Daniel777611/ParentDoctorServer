@@ -1506,6 +1506,10 @@
       
       ws.onopen = () => {
         console.log('✅ WebSocket connected');
+        // Update status display
+        const wsStatusEl = document.getElementById('displayWsStatus');
+        if (wsStatusEl) wsStatusEl.textContent = 'Connected';
+        
         // Register with doctor ID
         const registerMsg = {
           type: 'register',
@@ -1522,6 +1526,9 @@
           
           if (msg.type === 'registered') {
             console.log('✅ Registered with WebSocket, ID:', msg.id);
+            // Update status display
+            const wsStatusEl = document.getElementById('displayWsStatus');
+            if (wsStatusEl) wsStatusEl.textContent = `Registered (${msg.id})`;
           } else if (msg.type === 'signal') {
             console.log('📡 Signal received from:', msg.from, 'to:', msg.to, 'payload:', msg.payload);
             
@@ -1557,6 +1564,7 @@
       
       ws.onerror = (error) => {
         console.error('❌ WebSocket error:', error);
+        console.error('❌ WebSocket error details:', JSON.stringify(error, null, 2));
       };
       
       ws.onclose = () => {
@@ -1568,6 +1576,7 @@
     
     function handleIncomingCall(from, offer) {
       console.log('📞 Incoming call from:', from);
+      console.log('📞 Offer data:', offer);
       currentCallOffer = offer;
       currentCallFrom = from;
       
@@ -1576,11 +1585,17 @@
       const nameEl = document.getElementById('incomingCallName');
       const statusEl = document.getElementById('incomingCallStatus');
       
+      if (!overlay || !nameEl || !statusEl) {
+        console.error('❌ Incoming call UI elements not found!');
+        return;
+      }
+      
       // Set caller info (you can fetch parent info from API if needed)
       nameEl.textContent = 'Parent Calling';
       statusEl.textContent = 'Incoming video call...';
       
       overlay.style.display = 'flex';
+      console.log('✅ Incoming call overlay displayed');
     }
     
     function acceptCall() {
@@ -1646,15 +1661,76 @@
     document.getElementById('acceptCallBtn').addEventListener('click', acceptCall);
     document.getElementById('rejectCallBtn').addEventListener('click', rejectCall);
     
-    // Connect WebSocket on page load
-    if (doctorId) {
-      connectWebSocket();
+    // Display doctor ID on page
+    const displayDoctorIdEl = document.getElementById('displayDoctorId');
+    if (displayDoctorIdEl) {
+      displayDoctorIdEl.textContent = doctorId || 'Not found';
     }
+    
+    // Connect WebSocket on page load
+    console.log('🔍 Initial check - doctorId:', doctorId);
+    console.log('🔍 Initial check - doctorData:', doctorData);
+    
+    if (doctorId) {
+      console.log('✅ Doctor ID found, connecting WebSocket...');
+      connectWebSocket();
+    } else {
+      console.error('❌ No doctor ID found! Cannot connect WebSocket.');
+      console.error('SessionStorage doctorData:', sessionStorage.getItem('doctorData'));
+      // Try to get doctor data from signin page
+      const urlParams = new URLSearchParams(window.location.search);
+      const doctorIdParam = urlParams.get('doctor_id');
+      if (doctorIdParam) {
+        console.log('📝 Found doctor_id in URL params:', doctorIdParam);
+        doctorId = doctorIdParam;
+        if (displayDoctorIdEl) displayDoctorIdEl.textContent = doctorId;
+        connectWebSocket();
+      } else {
+        // Update status to show error
+        const wsStatusEl = document.getElementById('displayWsStatus');
+        if (wsStatusEl) wsStatusEl.textContent = 'No Doctor ID';
+      }
+    }
+    
+    // Also try to connect when page becomes visible (in case doctor logs in after page load)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !ws && doctorId) {
+        console.log('👁️ Page became visible, reconnecting WebSocket...');
+        connectWebSocket();
+      }
+    });
 
     // Function to simulate call connection (for testing)
     window.simulateCall = function() {
       setState(true);
     };
+    
+    // Debug function to check WebSocket status
+    window.checkWebSocketStatus = function() {
+      console.log('🔍 WebSocket Status Check:');
+      console.log('  - Doctor ID:', doctorId);
+      console.log('  - WebSocket object:', ws);
+      console.log('  - WebSocket readyState:', ws ? ws.readyState : 'null');
+      console.log('  - WebSocket URL:', ws ? ws.url : 'null');
+      console.log('  - Current call offer:', currentCallOffer);
+      console.log('  - Current call from:', currentCallFrom);
+      console.log('  - Available peers on server (check server logs)');
+      
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        console.log('✅ WebSocket is OPEN and ready');
+      } else if (ws && ws.readyState === WebSocket.CONNECTING) {
+        console.log('⏳ WebSocket is CONNECTING...');
+      } else if (ws && ws.readyState === WebSocket.CLOSING) {
+        console.log('📴 WebSocket is CLOSING...');
+      } else if (ws && ws.readyState === WebSocket.CLOSED) {
+        console.log('❌ WebSocket is CLOSED');
+      } else {
+        console.log('❌ WebSocket is not initialized');
+      }
+    };
+    
+    // Make checkWebSocketStatus available globally
+    console.log('💡 Debug: Call window.checkWebSocketStatus() in console to check WebSocket status');
 
     // Function to end call
     window.endCall = function() {
