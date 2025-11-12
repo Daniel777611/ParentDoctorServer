@@ -624,9 +624,23 @@ async function generateRuleBasedResponse(messages, familyId) {
   const gender = childInfo.gender || 'child';
   const genderText = gender === 'male' ? 'boy' : gender === 'female' ? 'girl' : 'child';
   
-  // Provide natural, friendly health advice
+  // Get development stage for professional explanations
+  let devStage = null;
+  if (childInfo.date_of_birth) {
+    const ageCalc = calculateAgeFromDate(childInfo.date_of_birth);
+    if (ageCalc) {
+      devStage = getDevelopmentStage(ageCalc);
+    }
+  }
+  
+  // Provide natural, friendly health advice with development stage context
   if (lastUserMessage.includes("fever") || lastUserMessage.includes("发烧")) {
-    return `I understand you're worried about ${childName}'s fever${ageText ? ` - ${childName} is ${age} years old, right?` : ''}. Here are some things that might help:
+    let stageContext = '';
+    if (devStage) {
+      stageContext = ` According to the calculated age, ${childName} is ${devStage.years}岁${devStage.months}个月${devStage.days}天 old and is in the ${devStage.stageDescriptionEn} stage. During this developmental stage, fever can occur more frequently because the immune system is still developing and maturing.`;
+    }
+    
+    return `I understand you're worried about ${childName}'s fever${ageText ? ` - ${childName} is ${age} years old` : ''}.${stageContext} Here are some things that might help:
 
 • **Keep an eye on the temperature** - Check it every few hours to see if it's going up or down
 • **Make sure ${childName} drinks plenty of water** - This is really important when they have a fever
