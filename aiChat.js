@@ -420,19 +420,23 @@ function extractChildInfo(messages) {
   
   // Extract name (supports English and Chinese, more patterns)
   const namePatterns = [
-    // English patterns
-    /(?:my child|child|kid|baby|son|daughter) (?:is|named|called|name is) ([a-z\u4e00-\u9fa5\s]+)/i,
-    /(?:name is|named|called) ([a-z\u4e00-\u9fa5\s]+)/i,
-    /(?:his|her) name (?:is|is called) ([a-z\u4e00-\u9fa5\s]+)/i,
+    // English patterns - more comprehensive
+    /(?:my child|child|kid|baby|son|daughter) (?:is|named|called|name is) ([a-z\u4e00-\u9fa5\s'-]+)/i,
+    /(?:name is|named|called) ([a-z\u4e00-\u9fa5\s'-]+)/i,
+    /(?:his|her) name (?:is|is called) ([a-z\u4e00-\u9fa5\s'-]+)/i,
     // Chinese patterns
-    /(?:他|她|孩子|宝宝|儿子|女儿) (?:叫|名字是|名字叫|姓名是) ([a-z\u4e00-\u9fa5\s]+)/i,
-    /(?:叫|名字是|名字叫|姓名是) ([a-z\u4e00-\u9fa5\s]+)/i,
+    /(?:他|她|孩子|宝宝|儿子|女儿) (?:叫|名字是|名字叫|姓名是) ([a-z\u4e00-\u9fa5\s'-]+)/i,
+    /(?:叫|名字是|名字叫|姓名是) ([a-z\u4e00-\u9fa5\s'-]+)/i,
     // Direct mention: "X is my child" or "我的孩子是X"
-    /^([a-z\u4e00-\u9fa5]+) (?:is|是) (?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿)/i,
-    /(?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿) (?:is|是) ([a-z\u4e00-\u9fa5]+)/i,
-    // More flexible patterns
-    /(?:孩子|宝宝|儿子|女儿) ([a-z\u4e00-\u9fa5]{1,10})/i,
-    /([a-z\u4e00-\u9fa5]{1,10}) (?:岁|years? old|个月|months?)/i
+    /^([a-z\u4e00-\u9fa5\s'-]+) (?:is|是) (?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿)/i,
+    /(?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿) (?:is|是) ([a-z\u4e00-\u9fa5\s'-]+)/i,
+    // More flexible patterns - catch names mentioned in context
+    /(?:孩子|宝宝|儿子|女儿) ([a-z\u4e00-\u9fa5]{1,20})/i,
+    /([a-z\u4e00-\u9fa5]{1,20}) (?:岁|years? old|个月|months?)/i,
+    // Catch names when AI mentions them: "Elijiah真是个可爱的名字"
+    /([A-Z][a-z]+) (?:真是个|是|的|真)/i,
+    // Catch names in quotes or after "叫"
+    /(?:叫|名字是|name is) ([A-Z][a-z]+)/i
   ];
   
   for (const pattern of namePatterns) {
@@ -440,12 +444,23 @@ function extractChildInfo(messages) {
     if (match && match[1]) {
       let name = match[1].trim();
       // Remove common words that might be captured
-      name = name.replace(/\b(and|or|the|a|an|is|are|was|were|的|和|或)\b/gi, '').trim();
+      name = name.replace(/\b(and|or|the|a|an|is|are|was|were|的|和|或|真|是|个|可爱)\b/gi, '').trim();
       
-      if (name.length >= 1 && name.length <= 20 && !/^\d+$/.test(name)) {
+      // Remove trailing punctuation and common suffixes
+      name = name.replace(/[，,。.！!？?]$/, '').trim();
+      
+      if (name.length >= 1 && name.length <= 30 && !/^\d+$/.test(name) && !/^[，,。.！!？?]+$/.test(name)) {
         // Capitalize first letter for English names, keep Chinese as is
-        info.child_name = /^[a-z]/.test(name) ? name.charAt(0).toUpperCase() + name.slice(1) : name;
-        console.log(`👶 Extracted child name: ${info.child_name}`);
+        if (/^[a-z]/.test(name)) {
+          info.child_name = name.charAt(0).toUpperCase() + name.slice(1);
+        } else if (/^[A-Z]/.test(name)) {
+          // Already capitalized, use as is
+          info.child_name = name;
+        } else {
+          // Chinese or other, use as is
+          info.child_name = name;
+        }
+        console.log(`👶 Extracted child name: ${info.child_name} (from pattern: ${pattern})`);
         break;
       }
     }
