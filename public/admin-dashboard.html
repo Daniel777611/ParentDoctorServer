@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据管理后台 | ParentDoctor</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --card: #fff;
+      --border: #e0e0e0;
+      --text: #222;
+      --muted: #666;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --success: #16a34a;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #3b82f6;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      background: var(--card);
+      padding: 8px;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .tab {
+      flex: 1;
+      padding: 12px 24px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: var(--muted);
+    }
+    .tab:hover {
+      background: #f5f5f5;
+    }
+    .tab.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--card);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .stat-card .label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .stat-card .subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .toolbar {
+      background: var(--card);
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .search-box {
+      flex: 1;
+      max-width: 400px;
+      position: relative;
+    }
+    .search-box input {
+      width: 100%;
+      padding: 10px 16px 10px 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-box input:focus {
+      border-color: var(--accent);
+    }
+    .search-box::before {
+      content: "🔍";
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+    }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+    .btn-secondary {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: #f5f5f5;
+    }
+    .table-container {
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    thead {
+      background: #f9f9f9;
+    }
+    th {
+      text-align: left;
+      padding: 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border);
+    }
+    td {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    tbody tr:hover {
+      background: #f9f9f9;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-success {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+    .badge-warning {
+      background: #fef3c7;
+      color: #f59e0b;
+    }
+    .badge-danger {
+      background: #fee2e2;
+      color: #ef4444;
+    }
+    .badge-info {
+      background: #dbeafe;
+      color: #3b82f6;
+    }
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .text-muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .text-small {
+      font-size: 12px;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <h1>📊 数据管理后台</h1>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="refreshData()">🔄 刷新</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Stats Cards -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">医生总数</div>
+        <div class="value" id="statDoctors">0</div>
+        <div class="subtitle" id="statDoctorsSub">已审核: 0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">家庭总数</div>
+        <div class="value" id="statFamilies">0</div>
+        <div class="subtitle" id="statFamiliesSub">已注册: 0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">孩子总数</div>
+        <div class="value" id="statChildren">0</div>
+        <div class="subtitle" id="statChildrenSub">已记录: 0</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('doctors')">👨‍⚕️ 医生</button>
+      <button class="tab" onclick="switchTab('families')">👨‍👩‍👧‍👦 家庭（家长）</button>
+      <button class="tab" onclick="switchTab('children')">👶 孩子</button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="搜索..." oninput="handleSearch()">
+      </div>
+      <button class="btn btn-primary" onclick="refreshData()">刷新数据</button>
+    </div>
+
+    <!-- Doctors Table -->
+    <div id="doctorsSection" class="table-container">
+      <div id="doctorsLoading" class="loading">加载中...</div>
+      <div id="doctorsEmpty" class="empty hidden">
+        <div class="empty-icon">📭</div>
+        <div>暂无医生数据</div>
+      </div>
+      <table id="doctorsTable" class="hidden">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>姓名</th>
+            <th>邮箱</th>
+            <th>电话</th>
+            <th>国家</th>
+            <th>专业</th>
+            <th>状态</th>
+            <th>创建时间</th>
+          </tr>
+        </thead>
+        <tbody id="doctorsBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Families Table -->
+    <div id="familiesSection" class="table-container hidden">
+      <div id="familiesLoading" class="loading">加载中...</div>
+      <div id="familiesEmpty" class="empty hidden">
+        <div class="empty-icon">📭</div>
+        <div>暂无家庭数据</div>
+      </div>
+      <table id="familiesTable" class="hidden">
+        <thead>
+          <tr>
+            <th>家庭ID</th>
+            <th>家庭名称</th>
+            <th>邮箱</th>
+            <th>电话</th>
+            <th>登录方式</th>
+            <th>邀请码</th>
+            <th>创建时间</th>
+          </tr>
+        </thead>
+        <tbody id="familiesBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Children Table -->
+    <div id="childrenSection" class="table-container hidden">
+      <div id="childrenLoading" class="loading">加载中...</div>
+      <div id="childrenEmpty" class="empty hidden">
+        <div class="empty-icon">📭</div>
+        <div>暂无孩子数据</div>
+      </div>
+      <table id="childrenTable" class="hidden">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>孩子姓名</th>
+            <th>家庭ID</th>
+            <th>家庭名称</th>
+            <th>出生日期</th>
+            <th>性别</th>
+            <th>医疗记录</th>
+            <th>来源</th>
+            <th>创建时间</th>
+          </tr>
+        </thead>
+        <tbody id="childrenBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let currentTab = 'doctors';
+    let doctors = [];
+    let families = [];
+    let children = [];
+    let filteredData = {
+      doctors: [],
+      families: [],
+      children: []
+    };
+
+    // Switch tabs
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      // Update tab buttons
+      document.querySelectorAll('.tab').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      // Hide all sections
+      document.getElementById('doctorsSection').classList.add('hidden');
+      document.getElementById('familiesSection').classList.add('hidden');
+      document.getElementById('childrenSection').classList.add('hidden');
+      
+      // Show selected section
+      if (tab === 'doctors') {
+        document.getElementById('doctorsSection').classList.remove('hidden');
+        renderDoctors();
+      } else if (tab === 'families') {
+        document.getElementById('familiesSection').classList.remove('hidden');
+        renderFamilies();
+      } else if (tab === 'children') {
+        document.getElementById('childrenSection').classList.remove('hidden');
+        renderChildren();
+      }
+    }
+
+    // Load all data
+    async function loadAllData() {
+      await Promise.all([
+        loadDoctors(),
+        loadFamilies(),
+        loadChildren(),
+        loadSummary()
+      ]);
+    }
+
+    // Load doctors
+    async function loadDoctors() {
+      const loadingEl = document.getElementById('doctorsLoading');
+      const tableEl = document.getElementById('doctorsTable');
+      const emptyEl = document.getElementById('doctorsEmpty');
+      
+      loadingEl.classList.remove('hidden');
+      tableEl.classList.add('hidden');
+      emptyEl.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/doctors');
+        const result = await res.json();
+        
+        if (result.success) {
+          doctors = result.data || [];
+          filteredData.doctors = doctors;
+          renderDoctors();
+        }
+      } catch (err) {
+        console.error('Error loading doctors:', err);
+        alert('加载医生数据失败: ' + err.message);
+      } finally {
+        loadingEl.classList.add('hidden');
+      }
+    }
+
+    // Load families
+    async function loadFamilies() {
+      const loadingEl = document.getElementById('familiesLoading');
+      const tableEl = document.getElementById('familiesTable');
+      const emptyEl = document.getElementById('familiesEmpty');
+      
+      loadingEl.classList.remove('hidden');
+      tableEl.classList.add('hidden');
+      emptyEl.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/admin/families');
+        const result = await res.json();
+        
+        if (result.success) {
+          families = result.data || [];
+          filteredData.families = families;
+          renderFamilies();
+        }
+      } catch (err) {
+        console.error('Error loading families:', err);
+        alert('加载家庭数据失败: ' + err.message);
+      } finally {
+        loadingEl.classList.add('hidden');
+      }
+    }
+
+    // Load children
+    async function loadChildren() {
+      const loadingEl = document.getElementById('childrenLoading');
+      const tableEl = document.getElementById('childrenTable');
+      const emptyEl = document.getElementById('childrenEmpty');
+      
+      loadingEl.classList.remove('hidden');
+      tableEl.classList.add('hidden');
+      emptyEl.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/admin/children');
+        const result = await res.json();
+        
+        if (result.success) {
+          children = result.data || [];
+          filteredData.children = children;
+          renderChildren();
+        }
+      } catch (err) {
+        console.error('Error loading children:', err);
+        alert('加载孩子数据失败: ' + err.message);
+      } finally {
+        loadingEl.classList.add('hidden');
+      }
+    }
+
+    // Load summary
+    async function loadSummary() {
+      try {
+        const res = await fetch('/api/admin/all-data');
+        const result = await res.json();
+        
+        if (result.success) {
+          const data = result.data;
+          document.getElementById('statDoctors').textContent = data.doctors || 0;
+          document.getElementById('statFamilies').textContent = data.families || 0;
+          document.getElementById('statChildren').textContent = data.children || 0;
+          
+          // Update subtitles
+          const approvedDoctors = doctors.filter(d => d.ai_review_status === 'approved').length;
+          document.getElementById('statDoctorsSub').textContent = `已审核: ${approvedDoctors}`;
+        }
+      } catch (err) {
+        console.error('Error loading summary:', err);
+      }
+    }
+
+    // Render doctors table
+    function renderDoctors() {
+      const tbody = document.getElementById('doctorsBody');
+      const tableEl = document.getElementById('doctorsTable');
+      const emptyEl = document.getElementById('doctorsEmpty');
+      
+      tbody.innerHTML = '';
+
+      if (filteredData.doctors.length === 0) {
+        tableEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      tableEl.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+
+      filteredData.doctors.forEach(doctor => {
+        const row = document.createElement('tr');
+        const status = doctor.ai_review_status || 'pending';
+        const statusClass = status === 'approved' ? 'badge-success' : 
+                          status === 'rejected' ? 'badge-danger' : 'badge-warning';
+        const statusText = status === 'approved' ? '已审核' : 
+                          status === 'rejected' ? '已拒绝' : '待审核';
+        
+        row.innerHTML = `
+          <td>${doctor.doctor_id || '-'}</td>
+          <td>${(doctor.first_name || '') + ' ' + (doctor.last_name || '')}</td>
+          <td>${doctor.email || '-'}</td>
+          <td>${doctor.phone || '-'}</td>
+          <td>${doctor.nation || '-'}</td>
+          <td>${doctor.major || '-'}</td>
+          <td><span class="badge ${statusClass}">${statusText}</span></td>
+          <td class="text-muted">${formatDate(doctor.created_at)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Render families table
+    function renderFamilies() {
+      const tbody = document.getElementById('familiesBody');
+      const tableEl = document.getElementById('familiesTable');
+      const emptyEl = document.getElementById('familiesEmpty');
+      
+      tbody.innerHTML = '';
+
+      if (filteredData.families.length === 0) {
+        tableEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      tableEl.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+
+      filteredData.families.forEach(family => {
+        const row = document.createElement('tr');
+        const authProvider = family.auth_provider || 'email';
+        const authProviderText = authProvider === 'apple' ? 'Apple' : 
+                                authProvider === 'google' ? 'Google' : 
+                                authProvider === 'phone' ? '手机' : '邮箱';
+        
+        row.innerHTML = `
+          <td>${family.family_id || '-'}</td>
+          <td>${family.family_name || '-'}</td>
+          <td>${family.email || '-'}</td>
+          <td>${family.phone || '-'}</td>
+          <td><span class="badge badge-info">${authProviderText}</span></td>
+          <td>${family.invite_code || '-'}</td>
+          <td class="text-muted">${formatDate(family.created_at)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Render children table
+    function renderChildren() {
+      const tbody = document.getElementById('childrenBody');
+      const tableEl = document.getElementById('childrenTable');
+      const emptyEl = document.getElementById('childrenEmpty');
+      
+      tbody.innerHTML = '';
+
+      if (filteredData.children.length === 0) {
+        tableEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      tableEl.classList.remove('hidden');
+      emptyEl.classList.add('hidden');
+
+      filteredData.children.forEach(child => {
+        const row = document.createElement('tr');
+        const source = child.extracted_from_chat ? '聊天提取' : '手动录入';
+        const sourceClass = child.extracted_from_chat ? 'badge-info' : 'badge-success';
+        
+        row.innerHTML = `
+          <td>${child.id || '-'}</td>
+          <td>${child.child_name || '-'}</td>
+          <td class="text-small">${child.family_id || '-'}</td>
+          <td>${child.family_name || '-'}</td>
+          <td>${child.date_of_birth || '-'}</td>
+          <td>${child.gender || '-'}</td>
+          <td class="text-muted text-small">${(child.medical_record || '').substring(0, 50)}${child.medical_record && child.medical_record.length > 50 ? '...' : ''}</td>
+          <td><span class="badge ${sourceClass}">${source}</span></td>
+          <td class="text-muted">${formatDate(child.created_at)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Handle search
+    function handleSearch() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      
+      if (currentTab === 'doctors') {
+        filteredData.doctors = doctors.filter(d => 
+          (d.doctor_id && d.doctor_id.toLowerCase().includes(query)) ||
+          (d.first_name && d.first_name.toLowerCase().includes(query)) ||
+          (d.last_name && d.last_name.toLowerCase().includes(query)) ||
+          (d.email && d.email.toLowerCase().includes(query)) ||
+          (d.phone && d.phone.includes(query)) ||
+          (d.major && d.major.toLowerCase().includes(query))
+        );
+        renderDoctors();
+      } else if (currentTab === 'families') {
+        filteredData.families = families.filter(f => 
+          (f.family_id && f.family_id.toLowerCase().includes(query)) ||
+          (f.family_name && f.family_name.toLowerCase().includes(query)) ||
+          (f.email && f.email.toLowerCase().includes(query)) ||
+          (f.phone && f.phone.includes(query))
+        );
+        renderFamilies();
+      } else if (currentTab === 'children') {
+        filteredData.children = children.filter(c => 
+          (c.child_name && c.child_name.toLowerCase().includes(query)) ||
+          (c.family_id && c.family_id.toLowerCase().includes(query)) ||
+          (c.family_name && c.family_name.toLowerCase().includes(query)) ||
+          (c.medical_record && c.medical_record.toLowerCase().includes(query))
+        );
+        renderChildren();
+      }
+    }
+
+    // Format date
+    function formatDate(dateString) {
+      if (!dateString) return '-';
+      const date = new Date(dateString);
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Refresh data
+    function refreshData() {
+      loadAllData();
+    }
+
+    // Initialize
+    loadAllData();
+  </script>
+</body>
+</html>
+

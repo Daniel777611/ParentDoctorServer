@@ -160,6 +160,59 @@ app.get("/api/doctors", async (_req, res) => {
   }
 });
 
+// ✅ Get All Families (Parents)
+app.get("/api/admin/families", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM family 
+      ORDER BY created_at DESC
+    `);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (err) {
+    console.error("❌ Error fetching families:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Get All Children
+app.get("/api/admin/children", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT c.*, f.family_name, f.email, f.phone 
+      FROM child c
+      LEFT JOIN family f ON c.family_id = f.family_id
+      ORDER BY c.created_at DESC
+    `);
+    res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (err) {
+    console.error("❌ Error fetching children:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Get All Data (Summary)
+app.get("/api/admin/all-data", async (_req, res) => {
+  try {
+    const [doctorsResult, familiesResult, childrenResult] = await Promise.all([
+      pool.query("SELECT COUNT(*) as count FROM doctor"),
+      pool.query("SELECT COUNT(*) as count FROM family"),
+      pool.query("SELECT COUNT(*) as count FROM child")
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        doctors: parseInt(doctorsResult.rows[0].count),
+        families: parseInt(familiesResult.rows[0].count),
+        children: parseInt(childrenResult.rows[0].count)
+      }
+    });
+  } catch (err) {
+    console.error("❌ Error fetching summary:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ✅ Send Email Verification Code
 app.post("/api/verify/send-code", async (req, res) => {
   try {
