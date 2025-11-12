@@ -9,7 +9,7 @@ const { WebSocketServer } = require("ws");
 const { Pool } = require("pg");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
-const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
 const { runAIReview } = require("./aiReview");
 const { sendVerificationCode } = require("./notification");
 
@@ -109,6 +109,24 @@ const pool = new Pool({
       );
     `);
     
+    // ✅ family_member table (each connection information = one family member, e.g., Dad, Mom)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS family_member (
+        id SERIAL PRIMARY KEY,
+        family_id VARCHAR(50) NOT NULL REFERENCES family(family_id) ON DELETE CASCADE,
+        member_name VARCHAR(200), -- e.g., "Dad", "Mom"
+        role VARCHAR(50), -- 'dad', 'mom', 'guardian', etc.
+        email VARCHAR(200),
+        phone VARCHAR(50),
+        auth_provider VARCHAR(50), -- 'email', 'apple', 'google', 'phone'
+        auth_provider_id VARCHAR(200), -- Provider-specific ID
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(family_id, email),
+        UNIQUE(family_id, phone)
+      );
+    `);
+    
     // ✅ child table (children information extracted from chat)
     await client.query(`
       CREATE TABLE IF NOT EXISTS child (
@@ -126,9 +144,10 @@ const pool = new Pool({
     
     // Create indexes
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_family_email ON family(email);
-      CREATE INDEX IF NOT EXISTS idx_family_phone ON family(phone);
       CREATE INDEX IF NOT EXISTS idx_family_invite_code ON family(invite_code);
+      CREATE INDEX IF NOT EXISTS idx_family_member_family_id ON family_member(family_id);
+      CREATE INDEX IF NOT EXISTS idx_family_member_email ON family_member(email);
+      CREATE INDEX IF NOT EXISTS idx_family_member_phone ON family_member(phone);
       CREATE INDEX IF NOT EXISTS idx_child_family_id ON child(family_id);
     `);
     
@@ -138,6 +157,38 @@ const pool = new Pool({
     console.error("❌ PostgreSQL connection failed:", err.message);
   }
 })();
+
+// Helper function to get family with all members
+async function getFamilyWithMembers(familyId) {
+  const { rows: familyRows } = await pool.query(
+    `SELECT * FROM family WHERE family_id = $1`,
+    [familyId]
+  );
+  
+  if (familyRows.length === 0) {
+    return null;
+  }
+  
+  const family = familyRows[0];
+  
+  // Get all members
+  const { rows: memberRows } = await pool.query(
+    `SELECT * FROM family_member WHERE family_id = $1 ORDER BY created_at ASC`,
+    [familyId]
+  );
+  
+  // Get all children
+  const { rows: childRows } = await pool.query(
+    `SELECT * FROM child WHERE family_id = $1 ORDER BY created_at ASC`,
+    [familyId]
+  );
+  
+  return {
+    ...family,
+    members: memberRows,
+    children: childRows
+  };
+}
 
 // ✅ Health Check
 app.get("/api/health", async (_req, res) => {
@@ -164,12 +215,108 @@ app.get("/api/doctors", async (_req, res) => {
 app.get("/api/admin/families", async (_req, res) => {
   try {
     const result = await pool.query(`
-      SELECT * FROM family 
-      ORDER BY created_at DESC
+      SELECT f.*, 
+        (SELECT json_agg(m.*) FROM family_member m WHERE m.family_id = f.family_id) as members,
+        (SELECT json_agg(c.*) FROM child c WHERE c.family_id = f.family_id) as children
+      FROM family f 
+      ORDER BY f.created_at DESC
     `);
     res.json({ success: true, count: result.rows.length, data: result.rows });
   } catch (err) {
     console.error("❌ Error fetching families:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Delete Single Family
+app.delete("/api/admin/families/:familyId", async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    
+    // Check if family exists
+    const { rows: existing } = await pool.query(
+      "SELECT * FROM family WHERE family_id = $1",
+      [familyId]
+    );
+    
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: "Family not found." });
+    }
+    
+    // Get all family members to delete their folders from R2
+    const { rows: members } = await pool.query(
+      "SELECT id, email, phone FROM family_member WHERE family_id = $1",
+      [familyId]
+    );
+    
+    let deletedFiles = 0;
+    
+    // Delete each family member's folder from R2
+    for (const member of members) {
+      // Use member ID or email/phone as identifier for folder
+      const memberIdentifier = member.email || member.phone || `member_${member.id}`;
+      const folderPrefix = `HealthAssistance/family/${familyId}/${memberIdentifier}/`;
+      const filesDeleted = await deleteFolderFromR2(folderPrefix);
+      deletedFiles += filesDeleted;
+    }
+    
+    // Also delete family-level folder if exists
+    const familyFolderPrefix = `HealthAssistance/family/${familyId}/`;
+    const familyFilesDeleted = await deleteFolderFromR2(familyFolderPrefix);
+    deletedFiles += familyFilesDeleted;
+    
+    // Delete family (cascade will delete members and children)
+    const deleteResult = await pool.query(
+      "DELETE FROM family WHERE family_id = $1",
+      [familyId]
+    );
+    
+    const deletedCount = deleteResult.rowCount || 0;
+    console.log(`🗑️  Deleted family ${familyId}: ${deletedFiles} file(s) deleted from R2`);
+    
+    res.json({
+      success: true,
+      message: `Family deleted successfully. ${deletedFiles} file(s) deleted from R2.`,
+      deletedCount,
+      deletedFiles,
+    });
+  } catch (err) {
+    console.error("❌ Error deleting family:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Delete Single Child
+app.delete("/api/admin/children/:childId", async (req, res) => {
+  try {
+    const { childId } = req.params;
+    
+    // Check if child exists
+    const { rows: existing } = await pool.query(
+      "SELECT * FROM child WHERE id = $1",
+      [childId]
+    );
+    
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: "Child not found." });
+    }
+    
+    // Delete child
+    const deleteResult = await pool.query(
+      "DELETE FROM child WHERE id = $1",
+      [childId]
+    );
+    
+    const deletedCount = deleteResult.rowCount || 0;
+    console.log(`🗑️  Deleted child ${childId}`);
+    
+    res.json({
+      success: true,
+      message: `Child deleted successfully.`,
+      deletedCount,
+    });
+  } catch (err) {
+    console.error("❌ Error deleting child:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -410,6 +557,56 @@ async function deleteFromR2(url) {
   }
 }
 
+// ✅ Delete Folder from Cloudflare R2 (delete all objects with prefix)
+async function deleteFolderFromR2(prefix) {
+  if (!prefix) return 0;
+  
+  try {
+    let deletedCount = 0;
+    let continuationToken = undefined;
+    
+    do {
+      // List all objects with the prefix
+      const listCommand = new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      });
+      
+      const listResponse = await r2.send(listCommand);
+      
+      if (!listResponse.Contents || listResponse.Contents.length === 0) {
+        break;
+      }
+      
+      // Delete objects in batches (max 1000 per request)
+      const objectsToDelete = listResponse.Contents.map(obj => ({ Key: obj.Key }));
+      
+      if (objectsToDelete.length > 0) {
+        const deleteCommand = new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: {
+            Objects: objectsToDelete,
+            Quiet: true,
+          },
+        });
+        
+        const deleteResponse = await r2.send(deleteCommand);
+        deletedCount += objectsToDelete.length;
+        console.log(`🗑️  Deleted ${objectsToDelete.length} file(s) from R2 folder: ${prefix}`);
+      }
+      
+      continuationToken = listResponse.NextContinuationToken;
+    } while (continuationToken);
+    
+    console.log(`🗑️  Deleted folder from R2: ${prefix} (${deletedCount} file(s) total)`);
+    return deletedCount;
+  } catch (err) {
+    console.error(`❌ R2 Folder Delete Failed (${prefix}):`, err.message);
+    return 0;
+  }
+}
+
 // ✅ Doctor Registration Endpoint
 app.post(
   "/api/doctors",
@@ -508,30 +705,17 @@ app.delete("/api/admin/doctors/:doctorId", async (req, res) => {
       return res.status(404).json({ success: false, message: "Doctor not found" });
     }
 
-    const doctor = rows[0];
-    let deletedFiles = 0;
-
-    // Delete files from R2
-    if (doctor.avatar) {
-      const deleted = await deleteFromR2(doctor.avatar);
-      if (deleted) deletedFiles++;
-    }
-    if (doctor.id_card) {
-      const deleted = await deleteFromR2(doctor.id_card);
-      if (deleted) deletedFiles++;
-    }
-    if (doctor.medical_license) {
-      const deleted = await deleteFromR2(doctor.medical_license);
-      if (deleted) deletedFiles++;
-    }
+    // Delete entire doctor folder from R2 (prefix: HealthAssistance/doctor/doctorsInfo/{doctorId}/)
+    const folderPrefix = `HealthAssistance/doctor/doctorsInfo/${doctorId}/`;
+    const deletedFiles = await deleteFolderFromR2(folderPrefix);
 
     // Delete from database
     const deleteResult = await pool.query("DELETE FROM doctor WHERE doctor_id = $1", [doctorId]);
 
-    console.log(`🗑️  Deleted doctor ${doctorId}: ${deletedFiles} file(s) deleted from R2`);
+    console.log(`🗑️  Deleted doctor ${doctorId}: ${deletedFiles} file(s) deleted from R2 folder`);
     res.json({
       success: true,
-      message: `Doctor deleted successfully. ${deletedFiles} file(s) deleted from R2.`,
+      message: `Doctor deleted successfully. ${deletedFiles} file(s) deleted from R2 folder.`,
       deletedFiles,
     });
   } catch (err) {
@@ -595,23 +779,35 @@ app.post(
 // ✅ Clear All Data (for testing/reset)
 app.delete("/api/admin/clear-all", async (req, res) => {
   try {
-    // First, get all doctors to extract file URLs
-    const { rows: doctors } = await pool.query("SELECT id_card, medical_license, avatar FROM doctor WHERE id_card IS NOT NULL OR medical_license IS NOT NULL OR avatar IS NOT NULL");
-
-    // Delete files from R2
     let deletedFiles = 0;
+    
+    // Get all doctor IDs and delete their folders
+    const { rows: doctors } = await pool.query("SELECT doctor_id FROM doctor");
     for (const doctor of doctors) {
-      if (doctor.avatar) {
-        const deleted = await deleteFromR2(doctor.avatar);
-        if (deleted) deletedFiles++;
-      }
-      if (doctor.id_card) {
-        const deleted = await deleteFromR2(doctor.id_card);
-        if (deleted) deletedFiles++;
-      }
-      if (doctor.medical_license) {
-        const deleted = await deleteFromR2(doctor.medical_license);
-        if (deleted) deletedFiles++;
+      const folderPrefix = `HealthAssistance/doctor/doctorsInfo/${doctor.doctor_id}/`;
+      const filesDeleted = await deleteFolderFromR2(folderPrefix);
+      deletedFiles += filesDeleted;
+    }
+
+    // Get all families and delete their folders
+    const { rows: families } = await pool.query("SELECT family_id FROM family");
+    for (const family of families) {
+      // Delete family-level folder
+      const familyFolderPrefix = `HealthAssistance/family/${family.family_id}/`;
+      const familyFilesDeleted = await deleteFolderFromR2(familyFolderPrefix);
+      deletedFiles += familyFilesDeleted;
+      
+      // Get and delete member folders
+      const { rows: members } = await pool.query(
+        "SELECT id, email, phone FROM family_member WHERE family_id = $1",
+        [family.family_id]
+      );
+      
+      for (const member of members) {
+        const memberIdentifier = member.email || member.phone || `member_${member.id}`;
+        const memberFolderPrefix = `HealthAssistance/family/${family.family_id}/${memberIdentifier}/`;
+        const memberFilesDeleted = await deleteFolderFromR2(memberFolderPrefix);
+        deletedFiles += memberFilesDeleted;
       }
     }
 
@@ -635,6 +831,86 @@ app.delete("/api/admin/clear-all", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Error clearing data:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ✅ Clear Specific Table (clear form)
+app.delete("/api/admin/clear/:table", async (req, res) => {
+  try {
+    const { table } = req.params;
+    let deletedCount = 0;
+    let deletedFiles = 0;
+    let message = "";
+    
+    if (table === "doctors") {
+      // Get all doctor IDs and delete their folders
+      const { rows: doctors } = await pool.query("SELECT doctor_id FROM doctor");
+      
+      // Delete each doctor's folder from R2
+      for (const doctor of doctors) {
+        const folderPrefix = `HealthAssistance/doctor/doctorsInfo/${doctor.doctor_id}/`;
+        const filesDeleted = await deleteFolderFromR2(folderPrefix);
+        deletedFiles += filesDeleted;
+      }
+      
+      // Delete all doctors from database
+      const result = await pool.query("DELETE FROM doctor");
+      deletedCount = result.rowCount || 0;
+      message = `All doctors cleared successfully. ${deletedCount} doctor(s) deleted, ${deletedFiles} file(s) deleted from R2.`;
+      
+    } else if (table === "families") {
+      // Get all families with their members
+      const { rows: families } = await pool.query("SELECT family_id FROM family");
+      
+      // Delete each family's folder and member folders from R2
+      for (const family of families) {
+        // Delete family-level folder
+        const familyFolderPrefix = `HealthAssistance/family/${family.family_id}/`;
+        const familyFilesDeleted = await deleteFolderFromR2(familyFolderPrefix);
+        deletedFiles += familyFilesDeleted;
+        
+        // Get and delete member folders
+        const { rows: members } = await pool.query(
+          "SELECT id, email, phone FROM family_member WHERE family_id = $1",
+          [family.family_id]
+        );
+        
+        for (const member of members) {
+          const memberIdentifier = member.email || member.phone || `member_${member.id}`;
+          const memberFolderPrefix = `HealthAssistance/family/${family.family_id}/${memberIdentifier}/`;
+          const memberFilesDeleted = await deleteFolderFromR2(memberFolderPrefix);
+          deletedFiles += memberFilesDeleted;
+        }
+      }
+      
+      // Delete all families (cascade will delete members and children)
+      const result = await pool.query("DELETE FROM family");
+      deletedCount = result.rowCount || 0;
+      message = `All families cleared successfully. ${deletedCount} family(ies) deleted, ${deletedFiles} file(s) deleted from R2.`;
+      
+    } else if (table === "children") {
+      // Delete all children
+      const result = await pool.query("DELETE FROM child");
+      deletedCount = result.rowCount || 0;
+      message = `All children cleared successfully. ${deletedCount} child(ren) deleted.`;
+      
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid table name. Use 'doctors', 'families', or 'children'." 
+      });
+    }
+    
+    console.log(`🗑️  Cleared ${table}: ${deletedCount} record(s) deleted`);
+    res.json({
+      success: true,
+      message,
+      deletedCount,
+      deletedFiles,
+    });
+  } catch (err) {
+    console.error(`❌ Error clearing ${req.params.table}:`, err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -728,15 +1004,21 @@ app.post("/api/parent/verify/send-code", async (req, res) => {
       return res.status(400).json({ success: false, message: "Email or phone is required." });
     }
     
-    // Check if already registered
+    // Check if already registered (check in family_member table)
     if (email) {
-      const { rows } = await pool.query("SELECT family_id FROM family WHERE lower(email) = $1 LIMIT 1", [email]);
+      const { rows } = await pool.query(
+        "SELECT family_id FROM family_member WHERE lower(email) = $1 LIMIT 1", 
+        [email]
+      );
       if (rows.length > 0) {
         return res.status(400).json({ success: false, message: "This email is already registered." });
       }
     }
     if (phone) {
-      const { rows } = await pool.query("SELECT family_id FROM family WHERE phone = $1 LIMIT 1", [phone]);
+      const { rows } = await pool.query(
+        "SELECT family_id FROM family_member WHERE phone = $1 LIMIT 1", 
+        [phone]
+      );
       if (rows.length > 0) {
         return res.status(400).json({ success: false, message: "This phone number is already registered." });
       }
@@ -807,26 +1089,114 @@ app.post("/api/parent/register", async (req, res) => {
       }
     }
     
-    // Generate family_id and invite_code
+    // Generate family_id and invite_code (By system)
     const familyId = "fam_" + uuidv4().split("-")[0];
     const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6-character code
     
-    // Generate device_id if not provided
-    const finalDeviceId = deviceId || "device_" + uuidv4();
+    // Generate device_id if not provided (By system)
+    // Device ID should be created when user skips login, but if not provided, generate one
+    const finalDeviceId = (deviceId && deviceId.trim() !== "") ? deviceId.trim() : "device_" + uuidv4();
     
-    // Insert into database
-    const result = await pool.query(
-      `INSERT INTO family (
-        family_id, family_name, email, phone, device_id, invite_code, auth_provider, auth_provider_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    console.log(`📱 Registering family with device_id: ${finalDeviceId}`);
+    
+    // Check if family already exists (by device_id or invite_code)
+    let existingFamily = null;
+    if (finalDeviceId) {
+      const { rows } = await pool.query(
+        "SELECT * FROM family WHERE device_id = $1 LIMIT 1",
+        [finalDeviceId]
+      );
+      if (rows.length > 0) {
+        existingFamily = rows[0];
+        console.log(`📱 Found existing family by device_id: ${existingFamily.family_id}`);
+      }
+    }
+    
+    let finalFamilyId;
+    let finalInviteCode;
+    
+    if (existingFamily) {
+      // Use existing family
+      finalFamilyId = existingFamily.family_id;
+      finalInviteCode = existingFamily.invite_code;
+    } else {
+      // Create new family (only shared info: family_id, family_name, device_id, invite_code)
+      const familyResult = await pool.query(
+        `INSERT INTO family (
+          family_id, family_name, device_id, invite_code
+        ) VALUES ($1, $2, $3, $4)
+        RETURNING *`,
+        [
+          familyId,
+          familyName || null,
+          finalDeviceId,
+          inviteCode
+        ]
+      );
+      finalFamilyId = familyResult.rows[0].family_id;
+      finalInviteCode = familyResult.rows[0].invite_code;
+    }
+    
+    // Check if member already exists (by email or phone)
+    let memberRole = "parent"; // Default role, can be "dad", "mom", etc.
+    if (email) {
+      const { rows: existingMember } = await pool.query(
+        "SELECT * FROM family_member WHERE family_id = $1 AND lower(email) = $2 LIMIT 1",
+        [finalFamilyId, email.trim().toLowerCase()]
+      );
+      if (existingMember.length > 0) {
+        // Member already exists, update if needed
+        const updateResult = await pool.query(
+          `UPDATE family_member 
+           SET auth_provider = $1, auth_provider_id = $2, updated_at = NOW()
+           WHERE id = $3
+           RETURNING *`,
+          [authProvider || "email", authProviderId || null, existingMember[0].id]
+        );
+        const familyWithMembers = await getFamilyWithMembers(finalFamilyId);
+        res.status(200).json({
+          success: true,
+          message: "Family member updated successfully.",
+          family: familyWithMembers,
+        });
+        return;
+      }
+    } else if (phone) {
+      const { rows: existingMember } = await pool.query(
+        "SELECT * FROM family_member WHERE family_id = $1 AND phone = $2 LIMIT 1",
+        [finalFamilyId, phone.trim()]
+      );
+      if (existingMember.length > 0) {
+        // Member already exists, update if needed
+        const updateResult = await pool.query(
+          `UPDATE family_member 
+           SET auth_provider = $1, auth_provider_id = $2, updated_at = NOW()
+           WHERE id = $3
+           RETURNING *`,
+          [authProvider || "phone", authProviderId || null, existingMember[0].id]
+        );
+        const familyWithMembers = await getFamilyWithMembers(finalFamilyId);
+        res.status(200).json({
+          success: true,
+          message: "Family member updated successfully.",
+          family: familyWithMembers,
+        });
+        return;
+      }
+    }
+    
+    // Create new family member (each connection information = one member)
+    const memberResult = await pool.query(
+      `INSERT INTO family_member (
+        family_id, member_name, role, email, phone, auth_provider, auth_provider_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *`,
       [
-        familyId,
-        familyName || null,
+        finalFamilyId,
+        familyName || null, // Can be "Dad", "Mom", etc.
+        memberRole,
         email ? email.trim().toLowerCase() : null,
         phone || null,
-        finalDeviceId,
-        inviteCode,
         authProvider || "email",
         authProviderId || null
       ]
@@ -836,10 +1206,13 @@ app.post("/api/parent/register", async (req, res) => {
     const identifier = (email || "").trim().toLowerCase() || phone;
     verificationCodes.delete(`parent_${identifier}`);
     
+    // Get family with all members
+    const familyWithMembers = await getFamilyWithMembers(finalFamilyId);
+    
     res.status(201).json({
       success: true,
       message: "Family registered successfully.",
-      family: result.rows[0],
+      family: familyWithMembers,
     });
   } catch (err) {
     console.error("❌ Error registering family:", err.message);
@@ -860,8 +1233,8 @@ app.post("/api/parent/login/send-code", async (req, res) => {
       return res.status(400).json({ success: false, message: "Email or phone is required." });
     }
     
-    // Check if registered
-    let query = "SELECT * FROM family WHERE ";
+    // Check if registered (check in family_member table)
+    let query = "SELECT * FROM family_member WHERE ";
     let params = [];
     if (email) {
       query += "lower(email) = $1";
@@ -872,8 +1245,8 @@ app.post("/api/parent/login/send-code", async (req, res) => {
     }
     query += " LIMIT 1";
     
-    const { rows } = await pool.query(query, params);
-    if (rows.length === 0) {
+    const { rows: memberRows } = await pool.query(query, params);
+    if (memberRows.length === 0) {
       return res.status(404).json({ success: false, message: "Account not found. Please register first." });
     }
     
@@ -917,27 +1290,35 @@ app.post("/api/parent/login/verify-code", async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid or expired verification code." });
     }
     
-    // Get family info
-    let query = "SELECT * FROM family WHERE ";
-    let params = [];
+    // Find member by email or phone
+    let memberQuery = "SELECT * FROM family_member WHERE ";
+    let memberParams = [];
     if (email) {
-      query += "lower(email) = $1";
-      params.push(email);
+      memberQuery += "lower(email) = $1";
+      memberParams.push(email);
     } else {
-      query += "phone = $1";
-      params.push(phone);
+      memberQuery += "phone = $1";
+      memberParams.push(phone);
     }
-    query += " LIMIT 1";
+    memberQuery += " LIMIT 1";
     
-    const { rows } = await pool.query(query, params);
-    if (rows.length === 0) {
+    const { rows: memberRows } = await pool.query(memberQuery, memberParams);
+    if (memberRows.length === 0) {
       return res.status(404).json({ success: false, message: "Account not found." });
+    }
+    
+    const member = memberRows[0];
+    
+    // Get family info with all members
+    const familyWithMembers = await getFamilyWithMembers(member.family_id);
+    if (!familyWithMembers) {
+      return res.status(404).json({ success: false, message: "Family not found." });
     }
     
     // Clear code
     verificationCodes.delete(`parent_login_${identifier}`);
     
-    res.json({ success: true, family: rows[0], message: "Login successful." });
+    res.json({ success: true, family: familyWithMembers, message: "Login successful." });
   } catch (err) {
     console.error("❌ Error verifying parent login code:", err.message);
     res.status(500).json({ success: false, error: "Failed to verify code." });
@@ -948,19 +1329,13 @@ app.post("/api/parent/login/verify-code", async (req, res) => {
 app.get("/api/parent/family/:familyId", async (req, res) => {
   try {
     const { familyId } = req.params;
-    const { rows } = await pool.query(
-      `SELECT f.*, 
-       (SELECT json_agg(c.*) FROM child c WHERE c.family_id = f.family_id) as children
-       FROM family f 
-       WHERE f.family_id = $1`,
-      [familyId]
-    );
+    const familyWithMembers = await getFamilyWithMembers(familyId);
     
-    if (rows.length === 0) {
+    if (!familyWithMembers) {
       return res.status(404).json({ success: false, message: "Family not found." });
     }
     
-    res.json({ success: true, family: rows[0] });
+    res.json({ success: true, family: familyWithMembers });
   } catch (err) {
     console.error("❌ Error fetching family:", err.message);
     res.status(500).json({ success: false, error: err.message });

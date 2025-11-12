@@ -302,7 +302,10 @@
       <div class="search-box">
         <input type="text" id="searchInput" placeholder="搜索..." oninput="handleSearch()">
       </div>
-      <button class="btn btn-primary" onclick="refreshData()">刷新数据</button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-primary" onclick="refreshData()">刷新数据</button>
+        <button class="btn btn-danger" onclick="clearCurrentTable()" id="clearTableBtn" style="display: none;">清空当前表单</button>
+      </div>
     </div>
 
     <!-- Doctors Table -->
@@ -323,6 +326,7 @@
             <th>专业</th>
             <th>状态</th>
             <th>创建时间</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody id="doctorsBody"></tbody>
@@ -341,11 +345,12 @@
           <tr>
             <th>家庭ID</th>
             <th>家庭名称</th>
-            <th>邮箱</th>
-            <th>电话</th>
-            <th>登录方式</th>
+            <th>设备ID</th>
             <th>邀请码</th>
+            <th>家庭成员</th>
+            <th>孩子数量</th>
             <th>创建时间</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody id="familiesBody"></tbody>
@@ -371,6 +376,7 @@
             <th>医疗记录</th>
             <th>来源</th>
             <th>创建时间</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody id="childrenBody"></tbody>
@@ -401,6 +407,14 @@
       document.getElementById('doctorsSection').classList.add('hidden');
       document.getElementById('familiesSection').classList.add('hidden');
       document.getElementById('childrenSection').classList.add('hidden');
+      
+      // Show/hide clear button based on current tab
+      const clearBtn = document.getElementById('clearTableBtn');
+      if (tab === 'doctors' || tab === 'families' || tab === 'children') {
+        clearBtn.style.display = 'inline-block';
+      } else {
+        clearBtn.style.display = 'none';
+      }
       
       // Show selected section
       if (tab === 'doctors') {
@@ -561,6 +575,9 @@
           <td>${doctor.major || '-'}</td>
           <td><span class="badge ${statusClass}">${statusText}</span></td>
           <td class="text-muted">${formatDate(doctor.created_at)}</td>
+          <td>
+            <button class="btn btn-sm btn-danger" onclick="deleteDoctor('${doctor.doctor_id}')">删除</button>
+          </td>
         `;
         tbody.appendChild(row);
       });
@@ -585,19 +602,37 @@
 
       filteredData.families.forEach(family => {
         const row = document.createElement('tr');
-        const authProvider = family.auth_provider || 'email';
-        const authProviderText = authProvider === 'apple' ? 'Apple' : 
-                                authProvider === 'google' ? 'Google' : 
-                                authProvider === 'phone' ? '手机' : '邮箱';
+        const members = family.members || [];
+        const children = family.children || [];
+        
+        // Format members info (each member = one connection information)
+        let membersInfo = '';
+        if (members.length > 0) {
+          membersInfo = members.map(m => {
+            const authProvider = m.auth_provider || 'email';
+            const authProviderText = authProvider === 'apple' ? 'Apple' : 
+                                    authProvider === 'google' ? 'Google' : 
+                                    authProvider === 'phone' ? '手机' : '邮箱';
+            const role = m.role || 'parent';
+            const roleText = role === 'dad' ? '爸爸' : role === 'mom' ? '妈妈' : '家长';
+            const contact = m.email || m.phone || '-';
+            return `${roleText}(${contact}) [${authProviderText}]`;
+          }).join('<br>');
+        } else {
+          membersInfo = '-';
+        }
         
         row.innerHTML = `
           <td>${family.family_id || '-'}</td>
           <td>${family.family_name || '-'}</td>
-          <td>${family.email || '-'}</td>
-          <td>${family.phone || '-'}</td>
-          <td><span class="badge badge-info">${authProviderText}</span></td>
+          <td class="text-small">${family.device_id || '-'}</td>
           <td>${family.invite_code || '-'}</td>
+          <td class="text-small">${membersInfo}</td>
+          <td>${children.length}</td>
           <td class="text-muted">${formatDate(family.created_at)}</td>
+          <td>
+            <button class="btn btn-sm btn-danger" onclick="deleteFamily('${family.family_id}')">删除</button>
+          </td>
         `;
         tbody.appendChild(row);
       });
@@ -635,6 +670,9 @@
           <td class="text-muted text-small">${(child.medical_record || '').substring(0, 50)}${child.medical_record && child.medical_record.length > 50 ? '...' : ''}</td>
           <td><span class="badge ${sourceClass}">${source}</span></td>
           <td class="text-muted">${formatDate(child.created_at)}</td>
+          <td>
+            <button class="btn btn-sm btn-danger" onclick="deleteChild(${child.id})">删除</button>
+          </td>
         `;
         tbody.appendChild(row);
       });
@@ -670,6 +708,122 @@
           (c.medical_record && c.medical_record.toLowerCase().includes(query))
         );
         renderChildren();
+      }
+    }
+
+    // Delete doctor
+    async function deleteDoctor(doctorId) {
+      if (!confirm(`确定要删除医生 ${doctorId} 吗？此操作不可恢复！`)) {
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/admin/doctors/${doctorId}`, {
+          method: 'DELETE'
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          alert(result.message || '删除成功');
+          await loadDoctors();
+          await loadSummary();
+        } else {
+          alert('删除失败: ' + (result.message || result.error));
+        }
+      } catch (err) {
+        console.error('Error deleting doctor:', err);
+        alert('删除失败: ' + err.message);
+      }
+    }
+    
+    // Delete family
+    async function deleteFamily(familyId) {
+      if (!confirm(`确定要删除家庭 ${familyId} 吗？此操作将同时删除该家庭的所有成员和孩子，不可恢复！`)) {
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/admin/families/${familyId}`, {
+          method: 'DELETE'
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          alert(result.message || '删除成功');
+          await loadFamilies();
+          await loadSummary();
+        } else {
+          alert('删除失败: ' + (result.message || result.error));
+        }
+      } catch (err) {
+        console.error('Error deleting family:', err);
+        alert('删除失败: ' + err.message);
+      }
+    }
+    
+    // Delete child
+    async function deleteChild(childId) {
+      if (!confirm(`确定要删除这个孩子记录吗？此操作不可恢复！`)) {
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/admin/children/${childId}`, {
+          method: 'DELETE'
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          alert(result.message || '删除成功');
+          await loadChildren();
+          await loadSummary();
+        } else {
+          alert('删除失败: ' + (result.message || result.error));
+        }
+      } catch (err) {
+        console.error('Error deleting child:', err);
+        alert('删除失败: ' + err.message);
+      }
+    }
+    
+    // Clear current table
+    async function clearCurrentTable() {
+      let tableName = '';
+      let tableNameCN = '';
+      
+      if (currentTab === 'doctors') {
+        tableName = 'doctors';
+        tableNameCN = '医生';
+      } else if (currentTab === 'families') {
+        tableName = 'families';
+        tableNameCN = '家庭';
+      } else if (currentTab === 'children') {
+        tableName = 'children';
+        tableNameCN = '孩子';
+      } else {
+        alert('请先选择一个表单');
+        return;
+      }
+      
+      if (!confirm(`确定要清空所有${tableNameCN}数据吗？此操作不可恢复！`)) {
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/api/admin/clear/${tableName}`, {
+          method: 'DELETE'
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          alert(result.message || '清空成功');
+          await loadAllData();
+        } else {
+          alert('清空失败: ' + (result.message || result.error));
+        }
+      } catch (err) {
+        console.error('Error clearing table:', err);
+        alert('清空失败: ' + err.message);
       }
     }
 
