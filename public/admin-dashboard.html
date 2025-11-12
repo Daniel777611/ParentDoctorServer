@@ -478,11 +478,21 @@
 
       try {
         const res = await fetch('/api/admin/families');
+        
+        // Check if response is OK
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error('API Error Response:', errorText);
+          throw new Error(`HTTP ${res.status}: ${errorText.substring(0, 100)}`);
+        }
+        
         const result = await res.json();
+        console.log('Families API Response:', result);
         
         if (result.success) {
           families = result.data || [];
           filteredData.families = families;
+          console.log('Loaded families:', families.length, families);
           renderFamilies();
           
           // Update children count in summary
@@ -493,6 +503,9 @@
             }
           });
           document.getElementById('statFamiliesSub').textContent = `孩子总数: ${totalChildren}`;
+        } else {
+          console.error('API returned success=false:', result);
+          alert('加载家庭数据失败: ' + (result.error || result.message || 'Unknown error'));
         }
       } catch (err) {
         console.error('Error loading families:', err);
@@ -603,8 +616,12 @@
       const emptyEl = document.getElementById('familiesEmpty');
       
       tbody.innerHTML = '';
+      
+      console.log('Rendering families, count:', filteredData.families.length);
+      console.log('Filtered families data:', filteredData.families);
 
       if (filteredData.families.length === 0) {
+        console.log('No families to display, showing empty state');
         tableEl.classList.add('hidden');
         emptyEl.classList.remove('hidden');
         return;

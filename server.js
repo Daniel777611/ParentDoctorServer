@@ -277,7 +277,9 @@ app.get("/api/admin/families", async (_req, res) => {
       ORDER BY created_at DESC
     `);
     
-    // Then get members and children for each family
+    console.log(`📊 Found ${families.length} families in database`);
+    
+    // Then get members, children, and devices for each family
     const familiesWithDetails = await Promise.all(
       families.map(async (family) => {
         // Get members
@@ -292,17 +294,29 @@ app.get("/api/admin/families", async (_req, res) => {
           [family.family_id]
         );
         
+        // Get device IDs from family_device table
+        const { rows: devices } = await pool.query(
+          `SELECT device_id FROM family_device WHERE family_id = $1 ORDER BY created_at ASC`,
+          [family.family_id]
+        );
+        
+        // Use first device_id if available, otherwise fall back to family.device_id
+        const deviceId = devices.length > 0 ? devices[0].device_id : (family.device_id || null);
+        
         return {
           ...family,
+          device_id: deviceId, // Override with device from family_device table
           members: members,
           children: children
         };
       })
     );
     
+    console.log(`✅ Returning ${familiesWithDetails.length} families with details`);
     res.json({ success: true, count: familiesWithDetails.length, data: familiesWithDetails });
   } catch (err) {
     console.error("❌ Error fetching families:", err.message);
+    console.error("❌ Error stack:", err.stack);
     res.status(500).json({ success: false, error: err.message });
   }
 });
