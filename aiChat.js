@@ -129,28 +129,34 @@ async function buildSystemPrompt(familyId) {
     // Continue with empty doctors array
   }
   
-  let prompt = `You are a professional pediatric health assistant for ParentDoctor, a revolutionary platform that connects parents with pediatric doctors INSTANTLY - no appointments needed, immediate video consultations available.
+  let prompt = `You are a friendly and caring pediatric health assistant for ParentDoctor, a platform where parents can instantly connect with pediatric doctors via video call - no appointments needed!
 
 **YOUR ROLE:**
-1. **Provide evidence-based health advice**: Give professional, research-backed health guidance based on pediatric medical literature and best practices
-2. **Personalize every response**: ALWAYS use the child's specific information (name, age, gender) in your responses to make parents feel their information is valuable and being used
-3. **Recommend instant doctor connections**: When appropriate, recommend doctors from our database who are available for IMMEDIATE video consultation (no appointment needed)
-4. **Reference medical research**: When providing advice, you can reference pediatric medical guidelines, research findings, and evidence-based practices
-5. **Make parents feel special**: Show that you remember and use their child's information, making them feel they're receiving personalized, unique care
+1. **Have natural conversations**: Talk like a caring friend who happens to know about children's health, not like a medical textbook
+2. **Get to know the child**: Naturally ask about the child's name, age/birthday, and gender during conversation - but make it feel like you're just getting to know them, not filling out a form
+3. **Give helpful advice**: Provide practical, easy-to-understand health advice based on what parents tell you
+4. **Recommend doctors when needed**: When parents need professional help, let them know they can connect with a doctor right away via video call
 
-**CRITICAL PRODUCT FEATURES:**
-- **NO APPOINTMENTS NEEDED**: Parents can connect with doctors instantly via video call
-- **IMMEDIATE CONSULTATION**: Doctors are available for real-time video consultations right now
-- **PERSONALIZED SERVICE**: Every interaction is tailored to the specific child's information
+**IMPORTANT - GATHER CHILD INFORMATION NATURALLY:**
+You need to know these things about the child to give better advice:
+- **Child's name** (e.g., "What's your child's name?" or "How should I call your little one?")
+- **Age or birthday** (e.g., "How old is [name]?" or "When was [name] born?")
+- **Gender** (e.g., "Is [name] a boy or a girl?")
 
-**IMPORTANT GUIDELINES:**
-- **ALWAYS use the child's name** when you have it - this makes responses feel personal and unique
-- **Reference the child's age** when giving advice - age-specific guidance shows expertise
-- **Acknowledge the child's information** - "Based on ${childName}'s age of ${age} years..." or "For a ${age}-year-old ${gender} like ${childName}..."
-- **Be professional and evidence-based** - reference pediatric guidelines, research, or medical best practices when appropriate
-- **Emphasize instant connection** - "You can connect with Dr. [Name] right now via video call - no appointment needed!"
-- **Ask questions naturally** - "To give you the best personalized advice for ${childName}, could you tell me a bit more about..."
-- **Make parents feel valued** - Show that their child's information is being actively used to provide unique, tailored advice
+**HOW TO ASK FOR INFORMATION:**
+- Don't ask all questions at once - spread them out naturally in conversation
+- If the parent mentions something naturally (like "my 5-year-old son"), acknowledge it and remember it
+- Make it feel like friendly conversation, not an interview
+- Example: "I'd love to help! What's your child's name? And how old are they?" - then later: "Is [name] a boy or a girl? This helps me give more specific advice."
+
+**RESPONSE STYLE:**
+- Be warm, friendly, and conversational - like talking to a friend
+- Use simple language, avoid medical jargon unless necessary
+- Show empathy and understanding
+- When you know the child's name, use it naturally in your responses
+- When you know their age, mention it when relevant (e.g., "For a 5-year-old like [name]...")
+- Keep responses helpful but not overwhelming
+- If you don't have the child's information yet, naturally ask for it during the conversation
 
 **Available Doctors in Database:**\n`;
   
@@ -308,20 +314,19 @@ async function generateRuleBasedResponse(messages, familyId) {
     doctorRecommendation = `\n\n👨‍⚕️ **Available Doctors:**\nI can connect you with ${doctorList}. Would you like me to recommend one of them?`;
   }
   
-  // Check if we need to ask for child information (ask naturally, not like a form)
+  // Check if we need to ask for child information (ask naturally, like a friend)
   if (!childInfo || !childInfo.child_name) {
-    return `Hello! I'm here to help you with your child's health. To give you the best advice, could you tell me a bit about your child? What's their name and how old are they?`;
+    return `Hi! I'm here to help with your child's health. I'd love to get to know your little one better - what's their name? And how old are they?`;
   }
   
   if (!childInfo.date_of_birth) {
-    const nameText = childInfo.child_name ? `, ${childInfo.child_name}` : "";
-    return `Thank you${nameText}! To provide personalized advice, could you tell me your child's age or date of birth?`;
+    return `Thanks for telling me about ${childInfo.child_name}! How old is ${childInfo.child_name}? Or when were they born?`;
   }
   
   if (!childInfo.gender) {
     const age = childInfo.date_of_birth ? calculateAge(childInfo.date_of_birth) : null;
-    const ageText = age ? ` (${age} years old)` : "";
-    return `I see ${childInfo.child_name}${ageText}. Could you tell me if they're a boy or a girl? This helps me give more specific advice.`;
+    const ageText = age ? ` who is ${age} years old` : "";
+    return `Got it! So ${childInfo.child_name}${ageText}. Is ${childInfo.child_name} a boy or a girl? This helps me give you more specific advice.`;
   }
   
   // We have all basic info, provide personalized advice
@@ -333,53 +338,39 @@ async function generateRuleBasedResponse(messages, familyId) {
   const gender = childInfo.gender || 'child';
   const genderText = gender === 'male' ? 'boy' : gender === 'female' ? 'girl' : 'child';
   
-  // Provide evidence-based, personalized health advice
+  // Provide natural, friendly health advice
   if (lastUserMessage.includes("fever") || lastUserMessage.includes("发烧")) {
-    const ageSpecificAdvice = age !== null && age < 3 
-      ? `For ${childName}, who is ${age} years old, the American Academy of Pediatrics recommends monitoring fever closely in young children.`
-      : age !== null && age >= 3
-      ? `Based on ${childName}'s age of ${age} years, pediatric guidelines suggest the following approach.`
-      : '';
-    
-    return `${ageSpecificAdvice ? ageSpecificAdvice + ' ' : ''}I understand you're concerned about ${childName}'s fever${ageText ? ` (${age} years old)` : ''}. Here's evidence-based guidance:
+    return `I understand you're worried about ${childName}'s fever${ageText ? ` - ${childName} is ${age} years old, right?` : ''}. Here are some things that might help:
 
-🩺 **Evidence-Based Recommendations:**
-• **Temperature monitoring**: According to pediatric guidelines, monitor ${childName}'s temperature every 4-6 hours
-• **Hydration**: Research shows adequate hydration is crucial - offer water or age-appropriate electrolyte solutions
-• **Rest**: Ensure ${childName} gets plenty of rest to support immune function
-• **Fever management**: For a ${age !== null ? `${age}-year-old` : 'child'} like ${childName}, age-appropriate fever reducers may be considered (consult a doctor for exact dosage)
+• **Keep an eye on the temperature** - Check it every few hours to see if it's going up or down
+• **Make sure ${childName} drinks plenty of water** - This is really important when they have a fever
+• **Let ${childName} rest** - Their body needs energy to fight off whatever's making them sick
+• **You can use fever medicine** if needed - but check with a doctor first about the right amount for ${age !== null ? `a ${age}-year-old` : 'their age'}
 
-⚠️ **When to Seek Immediate Medical Attention (AAP Guidelines):**
-• Fever persists for more than 3 days
-• Temperature exceeds 104°F/40°C
-• ${childName} shows signs of dehydration (dry mouth, no tears, reduced urination)
-• ${childName} appears very unwell, lethargic, or difficult to rouse
+**When you should definitely see a doctor:**
+• The fever lasts more than 3 days
+• The temperature gets really high (above 104°F/40°C)
+• ${childName} seems very tired or hard to wake up
+• ${childName} isn't drinking much or seems dehydrated
 
-${doctors.length > 0 ? `\n👨‍⚕️ **Instant Doctor Connection:**\nYou can connect with one of our pediatricians RIGHT NOW via video call - no appointment needed! This is especially important for a ${age !== null ? `${age}-year-old` : 'young child'} like ${childName}. Would you like me to connect you?` : ''}`;
+${doctors.length > 0 ? `If you're worried, you can connect with one of our pediatricians right now via video call - no need to make an appointment! Would that help?` : ''}`;
   }
   
   if (lastUserMessage.includes("cough") || lastUserMessage.includes("咳嗽")) {
-    const ageSpecificAdvice = age !== null && age < 2
-      ? `For ${childName}, who is ${age} years old, cough management requires special attention in infants and toddlers.`
-      : age !== null && age >= 2
-      ? `Based on ${childName}'s age of ${age} years, here's what pediatric research recommends.`
-      : '';
-    
-    return `${ageSpecificAdvice ? ageSpecificAdvice + ' ' : ''}I understand ${childName} has a cough${ageText ? ` (${age} years old)` : ''}. Here's personalized, evidence-based guidance:
+    return `I hear ${childName} has a cough${ageText ? ` - and ${childName} is ${age} years old` : ''}. Here are some things that usually help:
 
-🩺 **Evidence-Based Recommendations for ${childName}:**
-• **Hydration**: Keep ${childName} well-hydrated - research shows this helps thin mucus and soothe the throat
-• **Humidifier**: Using a cool-mist humidifier in ${childName}'s room can help, especially for a ${age !== null ? `${age}-year-old` : 'young child'}
-• **Rest**: Ensure ${childName} gets adequate rest to support recovery
-• **Environment**: Avoid irritants like smoke, strong perfumes, or allergens around ${childName}
+• **Keep ${childName} hydrated** - Drinking water helps thin out the mucus and makes the cough less annoying
+• **Try a humidifier** - Adding some moisture to the air can help, especially at night
+• **Make sure ${childName} gets enough rest** - Their body needs time to recover
+• **Keep the air clean** - Try to avoid smoke, strong smells, or things that might irritate their throat
 
-⚠️ **When to Seek Immediate Medical Attention:**
-• Cough persists for more than a week
-• ${childName} has difficulty breathing or shows signs of respiratory distress
-• Cough is accompanied by high fever (especially concerning for a ${age !== null ? `${age}-year-old` : 'young child'})
-• ${childName} appears distressed, has bluish lips, or shows signs of oxygen deprivation
+**You should see a doctor if:**
+• The cough doesn't go away after a week
+• ${childName} seems to be having trouble breathing
+• The cough comes with a high fever
+• ${childName} looks really uncomfortable or their lips look bluish
 
-${doctors.length > 0 ? `\n👨‍⚕️ **Instant Doctor Connection:**\nFor a ${age !== null ? `${age}-year-old` : 'young child'} like ${childName}, it's wise to consult a pediatrician. You can connect with one of our doctors RIGHT NOW via video call - no appointment needed!` : ''}`;
+${doctors.length > 0 ? `If you want, you can talk to one of our pediatricians right away via video call - no appointment needed!` : ''}`;
   }
   
   if (lastUserMessage.includes("doctor") || lastUserMessage.includes("医生") || 
@@ -403,8 +394,8 @@ You can connect with any of these doctors immediately via video call. This is pe
     }
   }
   
-  // Default personalized response
-  return `I understand your concern about ${childName}${ageText ? ` (${age} years old)` : ''}. To provide the most accurate, evidence-based advice tailored specifically to ${childName}, could you tell me more about the specific symptoms or concerns you're experiencing?${doctorRecommendation}`;
+  // Default natural, friendly response
+  return `I understand you're concerned about ${childName}${ageText ? ` (${age} years old)` : ''}. Can you tell me more about what's going on? What symptoms is ${childName} showing?${doctorRecommendation}`;
 }
 
 /**
