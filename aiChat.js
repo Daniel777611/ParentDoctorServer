@@ -69,16 +69,145 @@ async function getAvailableDoctors() {
 }
 
 /**
- * Calculate age from date of birth (accurate calculation)
+ * Parse age/birthday raw text and calculate accurate age (years, months, days)
+ * Returns: { years: number, months: number, days: number, date_of_birth: string }
  */
-function calculateAge(dateOfBirth) {
+function parseAgeAndCalculate(ageRawText, existingDateOfBirth) {
+  if (!ageRawText && !existingDateOfBirth) {
+    return null;
+  }
+  
+  const result = {
+    years: null,
+    months: null,
+    days: null,
+    date_of_birth: null
+  };
+  
+  try {
+    // If we have a date of birth, calculate from it
+    if (existingDateOfBirth) {
+      result.date_of_birth = existingDateOfBirth;
+      const ageCalc = calculateAgeFromDate(existingDateOfBirth);
+      if (ageCalc) {
+        result.years = ageCalc.years;
+        result.months = ageCalc.months;
+        result.days = ageCalc.days;
+        return result;
+      }
+    }
+    
+    // Parse raw text
+    const text = (ageRawText || '').toLowerCase().trim();
+    
+    // Try to extract date first (YYYY-MM-DD, MM/DD/YYYY, etc.)
+    const dateMatch = text.match(/(\d{4}[-/]\d{1,2}[-/]\d{1,2})/);
+    if (dateMatch) {
+      let dateStr = dateMatch[1].replace(/\//g, '-');
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        let year, month, day;
+        if (parts[0].length === 4) {
+          // YYYY-MM-DD
+          year = parseInt(parts[0]);
+          month = parseInt(parts[1]);
+          day = parseInt(parts[2]);
+        } else {
+          // Try MM-DD-YYYY or DD-MM-YYYY
+          const yearIdx = parts.findIndex(p => p.length === 4);
+          if (yearIdx >= 0) {
+            year = parseInt(parts[yearIdx]);
+            month = parseInt(yearIdx === 0 ? parts[1] : parts[0]);
+            day = parseInt(yearIdx === 2 ? parts[1] : parts[2]);
+          }
+        }
+        
+        if (year && month && day) {
+          result.date_of_birth = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const ageCalc = calculateAgeFromDate(result.date_of_birth);
+          if (ageCalc) {
+            result.years = ageCalc.years;
+            result.months = ageCalc.months;
+            result.days = ageCalc.days;
+            return result;
+          }
+        }
+      }
+    }
+    
+    // Try to extract age in months
+    const monthMatch = text.match(/(\d+)\s*(?:个月|months?)/);
+    if (monthMatch) {
+      const totalMonths = parseInt(monthMatch[1]);
+      result.years = Math.floor(totalMonths / 12);
+      result.months = totalMonths % 12;
+      result.days = 0;
+      // Calculate approximate date of birth
+      const today = new Date();
+      const birthDate = new Date(today.getFullYear(), today.getMonth() - totalMonths, today.getDate());
+      result.date_of_birth = `${birthDate.getFullYear()}-${String(birthDate.getMonth() + 1).padStart(2, '0')}-${String(birthDate.getDate()).padStart(2, '0')}`;
+      return result;
+    }
+    
+    // Try to extract age in days
+    const dayMatch = text.match(/(\d+)\s*(?:天|days?)/);
+    if (dayMatch) {
+      const totalDays = parseInt(dayMatch[1]);
+      result.years = 0;
+      result.months = Math.floor(totalDays / 30);
+      result.days = totalDays % 30;
+      // Calculate date of birth
+      const today = new Date();
+      const birthDate = new Date(today.getTime() - totalDays * 24 * 60 * 60 * 1000);
+      result.date_of_birth = `${birthDate.getFullYear()}-${String(birthDate.getMonth() + 1).padStart(2, '0')}-${String(birthDate.getDate()).padStart(2, '0')}`;
+      return result;
+    }
+    
+    // Try to extract age in years
+    const yearMatch = text.match(/(\d+)\s*(?:岁|years?|years? old)/);
+    if (yearMatch) {
+      const years = parseInt(yearMatch[1]);
+      result.years = years;
+      result.months = 0;
+      result.days = 0;
+      // Calculate approximate date of birth (use current date minus years)
+      const today = new Date();
+      const birthDate = new Date(today.getFullYear() - years, today.getMonth(), today.getDate());
+      result.date_of_birth = `${birthDate.getFullYear()}-${String(birthDate.getMonth() + 1).padStart(2, '0')}-${String(birthDate.getDate()).padStart(2, '0')}`;
+      return result;
+    }
+    
+    // Try to extract just a number (assume years if between 0-25)
+    const numMatch = text.match(/(\d+)/);
+    if (numMatch) {
+      const num = parseInt(numMatch[1]);
+      if (num >= 0 && num <= 25) {
+        result.years = num;
+        result.months = 0;
+        result.days = 0;
+        const today = new Date();
+        const birthDate = new Date(today.getFullYear() - num, today.getMonth(), today.getDate());
+        result.date_of_birth = `${birthDate.getFullYear()}-${String(birthDate.getMonth() + 1).padStart(2, '0')}-${String(birthDate.getDate()).padStart(2, '0')}`;
+        return result;
+      }
+    }
+    
+    return null;
+  } catch (err) {
+    console.error("❌ Error parsing age:", err.message);
+    return null;
+  }
+}
+
+/**
+ * Calculate accurate age from date of birth (years, months, days)
+ */
+function calculateAgeFromDate(dateOfBirth) {
   if (!dateOfBirth) return null;
   
   try {
-    // Try to parse different date formats
     let birthDate;
     if (dateOfBirth.includes('-')) {
-      // Handle YYYY-MM-DD format
       const parts = dateOfBirth.split('-');
       if (parts.length === 3) {
         birthDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -88,11 +217,9 @@ function calculateAge(dateOfBirth) {
     } else if (dateOfBirth.includes('/')) {
       const parts = dateOfBirth.split('/');
       if (parts.length === 3) {
-        // Try to determine format: if first part is 4 digits, it's YYYY/MM/DD
         if (parts[0].length === 4) {
           birthDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
         } else {
-          // Assume MM/DD/YYYY
           birthDate = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
         }
       }
@@ -101,32 +228,45 @@ function calculateAge(dateOfBirth) {
     }
     
     if (isNaN(birthDate.getTime())) {
-      console.error(`❌ Invalid date format: ${dateOfBirth}`);
       return null;
     }
     
     const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    const dayDiff = today.getDate() - birthDate.getDate();
+    let years = today.getFullYear() - birthDate.getFullYear();
+    let months = today.getMonth() - birthDate.getMonth();
+    let days = today.getDate() - birthDate.getDate();
     
-    // Adjust age if birthday hasn't occurred this year
-    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-      age--;
+    // Adjust for negative days
+    if (days < 0) {
+      months--;
+      const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+      days += lastMonth.getDate();
+    }
+    
+    // Adjust for negative months
+    if (months < 0) {
+      years--;
+      months += 12;
     }
     
     // Age cannot be negative
-    if (age < 0) {
-      console.warn(`⚠️  Calculated negative age for birth date ${dateOfBirth}, returning 0`);
-      return 0;
+    if (years < 0) {
+      return { years: 0, months: 0, days: 0 };
     }
     
-    console.log(`📅 Calculated age: ${age} years old (born: ${dateOfBirth}, today: ${today.toISOString().split('T')[0]})`);
-    return age;
+    return { years, months, days };
   } catch (err) {
-    console.error("❌ Error calculating age:", err.message);
+    console.error("❌ Error calculating age from date:", err.message);
     return null;
   }
+}
+
+/**
+ * Calculate age from date of birth (for backward compatibility)
+ */
+function calculateAge(dateOfBirth) {
+  const result = calculateAgeFromDate(dateOfBirth);
+  return result ? result.years : null;
 }
 
 /**
@@ -823,6 +963,8 @@ async function handleChatMessage(familyId, userMessage) {
         const extractedFields = [];
         if (extractedInfo.child_name) extractedFields.push(`name: ${extractedInfo.child_name}`);
         if (extractedInfo.date_of_birth) extractedFields.push(`date_of_birth: ${extractedInfo.date_of_birth}`);
+        if (extractedInfo.age_raw_text) extractedFields.push(`age_raw_text: "${extractedInfo.age_raw_text}"`);
+        if (parsedAge) extractedFields.push(`parsed_age: ${parsedAge.years}岁${parsedAge.months}个月${parsedAge.days}天`);
         if (extractedInfo.gender) extractedFields.push(`gender: ${extractedInfo.gender}`);
         if (extractedInfo.medical_record) extractedFields.push(`medical_record: ${extractedInfo.medical_record}`);
         
