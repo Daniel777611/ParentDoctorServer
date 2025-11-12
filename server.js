@@ -282,33 +282,64 @@ app.get("/api/admin/families", async (_req, res) => {
     // Then get members, children, and devices for each family
     const familiesWithDetails = await Promise.all(
       families.map(async (family) => {
-        // Get members
-        const { rows: members } = await pool.query(
-          `SELECT * FROM family_member WHERE family_id = $1 ORDER BY created_at ASC`,
-          [family.family_id]
-        );
-        
-        // Get children
-        const { rows: children } = await pool.query(
-          `SELECT * FROM child WHERE family_id = $1 ORDER BY created_at ASC`,
-          [family.family_id]
-        );
-        
-        // Get device IDs from family_device table
-        const { rows: devices } = await pool.query(
-          `SELECT device_id FROM family_device WHERE family_id = $1 ORDER BY created_at ASC`,
-          [family.family_id]
-        );
-        
-        // Use first device_id if available, otherwise fall back to family.device_id
-        const deviceId = devices.length > 0 ? devices[0].device_id : (family.device_id || null);
-        
-        return {
-          ...family,
-          device_id: deviceId, // Override with device from family_device table
-          members: members,
-          children: children
-        };
+        try {
+          // Get members
+          let members = [];
+          try {
+            const memberResult = await pool.query(
+              `SELECT * FROM family_member WHERE family_id = $1 ORDER BY created_at ASC`,
+              [family.family_id]
+            );
+            members = memberResult.rows || [];
+          } catch (memberErr) {
+            console.warn(`⚠️  Error fetching members for family ${family.family_id}:`, memberErr.message);
+            members = [];
+          }
+          
+          // Get children
+          let children = [];
+          try {
+            const childResult = await pool.query(
+              `SELECT * FROM child WHERE family_id = $1 ORDER BY created_at ASC`,
+              [family.family_id]
+            );
+            children = childResult.rows || [];
+          } catch (childErr) {
+            console.warn(`⚠️  Error fetching children for family ${family.family_id}:`, childErr.message);
+            children = [];
+          }
+          
+          // Get device IDs from family_device table (if table exists)
+          let deviceId = family.device_id || null;
+          try {
+            const deviceResult = await pool.query(
+              `SELECT device_id FROM family_device WHERE family_id = $1 ORDER BY created_at ASC LIMIT 1`,
+              [family.family_id]
+            );
+            if (deviceResult.rows && deviceResult.rows.length > 0) {
+              deviceId = deviceResult.rows[0].device_id;
+            }
+          } catch (deviceErr) {
+            // Table might not exist or query failed, use family.device_id as fallback
+            console.warn(`⚠️  Error fetching device for family ${family.family_id}:`, deviceErr.message);
+            deviceId = family.device_id || null;
+          }
+          
+          return {
+            ...family,
+            device_id: deviceId,
+            members: members,
+            children: children
+          };
+        } catch (familyErr) {
+          console.error(`❌ Error processing family ${family.family_id}:`, familyErr.message);
+          // Return family with empty members and children if processing fails
+          return {
+            ...family,
+            members: [],
+            children: []
+          };
+        }
       })
     );
     
