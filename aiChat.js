@@ -95,69 +95,58 @@ async function callAI(messages, familyId) {
   }
 
   try {
-    // Use Node.js built-in fetch (available in Node 18+) or require https/http
-    let fetch;
-    if (typeof globalThis.fetch !== 'undefined') {
-      fetch = globalThis.fetch;
-    } else {
-      // Fallback for older Node.js versions
-      const https = require('https');
-      const http = require('http');
-      const { URL } = require('url');
-      fetch = async (url, options) => {
-        return new Promise((resolve, reject) => {
-          const urlObj = new URL(url);
-          const lib = urlObj.protocol === 'https:' ? https : http;
-          const data = JSON.stringify(options.body);
-          
-          const req = lib.request({
-            hostname: urlObj.hostname,
-            port: urlObj.port,
-            path: urlObj.pathname,
-            method: options.method || 'GET',
-            headers: options.headers || {}
-          }, (res) => {
-            let body = '';
-            res.on('data', (chunk) => body += chunk);
-            res.on('end', () => {
-              resolve({
-                ok: res.statusCode >= 200 && res.statusCode < 300,
-                status: res.statusCode,
-                json: async () => JSON.parse(body),
-                text: async () => body
-              });
-            });
-          });
-          
-          req.on('error', reject);
-          if (data) req.write(data);
-          req.end();
-        });
-      };
-    }
+    // Use Node.js built-in fetch (available in Node 18+) or use https module
+    const https = require('https');
+    const { URL } = require('url');
     
-    const response = await fetch(OPENAI_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
+    return new Promise((resolve, reject) => {
+      const urlObj = new URL(OPENAI_API_URL);
+      const postData = JSON.stringify({
         model: "gpt-4o-mini", // or "gpt-3.5-turbo" for cheaper option
         messages: messages,
         temperature: 0.7,
         max_tokens: 500
-      })
+      });
+      
+      const options = {
+        hostname: urlObj.hostname,
+        port: 443,
+        path: urlObj.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Length': Buffer.byteLength(postData)
+        }
+      };
+      
+      const req = https.request(options, (res) => {
+        let body = '';
+        res.on('data', (chunk) => body += chunk);
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              const data = JSON.parse(body);
+              resolve(data.choices[0].message.content);
+            } catch (parseErr) {
+              console.error("❌ Error parsing OpenAI response:", parseErr.message);
+              resolve(generateRuleBasedResponse(messages, familyId));
+            }
+          } else {
+            console.error("❌ OpenAI API error:", res.statusCode, body);
+            resolve(generateRuleBasedResponse(messages, familyId));
+          }
+        });
+      });
+      
+      req.on('error', (err) => {
+        console.error("❌ Error calling OpenAI API:", err.message);
+        resolve(generateRuleBasedResponse(messages, familyId));
+      });
+      
+      req.write(postData);
+      req.end();
     });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("❌ OpenAI API error:", error);
-      return generateRuleBasedResponse(messages, familyId);
-    }
-
-    const data = await response.json();
-    return data.choices[0].message.content;
   } catch (err) {
     console.error("❌ Error calling OpenAI API:", err.message);
     return generateRuleBasedResponse(messages, familyId);
