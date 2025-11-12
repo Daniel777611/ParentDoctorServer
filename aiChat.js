@@ -415,6 +415,9 @@ function extractChildInfo(messages) {
   const fullText = messages.map(m => m.content).join(" ");
   const lowerText = fullText.toLowerCase();
   
+  console.log(`🔍 Extracting child info from conversation (${messages.length} messages)`);
+  console.log(`📝 Full text: ${fullText.substring(0, 200)}...`);
+  
   // Extract name (supports English and Chinese, more patterns)
   const namePatterns = [
     // English patterns
@@ -426,7 +429,10 @@ function extractChildInfo(messages) {
     /(?:叫|名字是|名字叫|姓名是) ([a-z\u4e00-\u9fa5\s]+)/i,
     // Direct mention: "X is my child" or "我的孩子是X"
     /^([a-z\u4e00-\u9fa5]+) (?:is|是) (?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿)/i,
-    /(?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿) (?:is|是) ([a-z\u4e00-\u9fa5]+)/i
+    /(?:my|我的) (?:child|kid|baby|son|daughter|孩子|宝宝|儿子|女儿) (?:is|是) ([a-z\u4e00-\u9fa5]+)/i,
+    // More flexible patterns
+    /(?:孩子|宝宝|儿子|女儿) ([a-z\u4e00-\u9fa5]{1,10})/i,
+    /([a-z\u4e00-\u9fa5]{1,10}) (?:岁|years? old|个月|months?)/i
   ];
   
   for (const pattern of namePatterns) {
@@ -457,7 +463,11 @@ function extractChildInfo(messages) {
     /(?:今年|现在|已经) (\d+) (?:岁|years? old)/i,
     /(\d+) (?:years?|months?|days?|岁|个月|天) (?:old|age)?/i,
     /(\d+) (?:岁|years? old)/i,
-    /(?:孩子|宝宝|儿子|女儿) (\d+) (?:岁|years? old)/i
+    /(?:孩子|宝宝|儿子|女儿) (\d+) (?:岁|years? old)/i,
+    // More flexible age patterns
+    /(\d+)岁/i,
+    /(\d+) years? old/i,
+    /(?:今年|现在) (\d+)/i
   ];
   
   for (const pattern of dobPatterns) {
@@ -506,11 +516,28 @@ function extractChildInfo(messages) {
   
   // Extract gender (supports English and Chinese)
   if (lowerText.includes("boy") || lowerText.includes("son") || lowerText.includes("male") || 
-      lowerText.includes("男孩") || lowerText.includes("儿子") || lowerText.includes("男")) {
+      lowerText.includes("男孩") || lowerText.includes("儿子") || lowerText.includes("男") ||
+      lowerText.includes("是个男孩") || lowerText.includes("是男孩")) {
     info.gender = "male";
+    console.log(`👦 Extracted gender: male`);
   } else if (lowerText.includes("girl") || lowerText.includes("daughter") || lowerText.includes("female") ||
-             lowerText.includes("女孩") || lowerText.includes("女儿") || lowerText.includes("女")) {
+             lowerText.includes("女孩") || lowerText.includes("女儿") || lowerText.includes("女") ||
+             lowerText.includes("是个女孩") || lowerText.includes("是女孩")) {
     info.gender = "female";
+    console.log(`👧 Extracted gender: female`);
+  }
+  
+  // Log what was extracted
+  const extracted = [];
+  if (info.child_name) extracted.push(`name: ${info.child_name}`);
+  if (info.date_of_birth) extracted.push(`date_of_birth: ${info.date_of_birth}`);
+  if (info.gender) extracted.push(`gender: ${info.gender}`);
+  if (info.medical_record) extracted.push(`medical_record: ${info.medical_record}`);
+  
+  if (extracted.length > 0) {
+    console.log(`✅ Extracted child info: ${extracted.join(', ')}`);
+  } else {
+    console.log(`⚠️  No child info extracted from conversation`);
   }
   
   return info;
@@ -662,8 +689,17 @@ async function handleChatMessage(familyId, userMessage) {
                          extractedInfo.gender || 
                          extractedInfo.medical_record;
     
+    console.log(`🔍 Checking extracted info:`, {
+      child_name: extractedInfo.child_name,
+      date_of_birth: extractedInfo.date_of_birth,
+      gender: extractedInfo.gender,
+      medical_record: extractedInfo.medical_record,
+      hasAnyNewInfo
+    });
+    
     // If we extracted any information, save it immediately to start/update the child record
     if (hasAnyNewInfo) {
+      console.log(`💾 Saving child info to database for family ${familyId}...`);
       try {
         // Merge extracted info with existing info (extracted info takes priority for new fields)
         const mergedInfo = {
