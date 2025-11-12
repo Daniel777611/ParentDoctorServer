@@ -162,11 +162,14 @@ async function buildSystemPrompt(familyId) {
 You need to know these things about the child to give better advice:
 - **Child's name** (e.g., "What's your child's name?" or "How should I call your little one?")
 - **Age or birthday** (e.g., "How old is [name]?" or "When was [name] born?")
+  - **CRITICAL**: When the parent tells you about age/birthday, repeat it back EXACTLY as they said it. Do NOT calculate or convert it yourself. Just acknowledge what they said.
+  - Example: If parent says "he's 3 months old", you say "I see, [name] is 3 months old" - don't convert to days or years.
+  - Example: If parent says "born on 10-10-2025", you say "Got it, [name] was born on October 10, 2025" - don't calculate the age.
 - **Gender** (e.g., "Is [name] a boy or a girl?")
 
 **HOW TO ASK FOR INFORMATION:**
 - Don't ask all questions at once - spread them out naturally in conversation
-- If the parent mentions something naturally (like "my 5-year-old son"), acknowledge it and remember it
+- If the parent mentions something naturally (like "my 5-year-old son"), acknowledge it EXACTLY as they said it
 - Make it feel like friendly conversation, not an interview
 - Example: "I'd love to help! What's your child's name? And how old are they?" - then later: "Is [name] a boy or a girl? This helps me give more specific advice."
 
@@ -423,11 +426,13 @@ You can connect with any of these doctors immediately via video call. This is pe
 
 /**
  * Extract child information from conversation (supports both English and Chinese)
+ * For age/birthday: Extract raw text and let backend calculate accurately
  */
 function extractChildInfo(messages) {
   const info = {
     child_name: null,
     date_of_birth: null,
+    age_raw_text: null, // Store raw age/birthday text from user
     gender: null,
     medical_record: null
   };
@@ -615,12 +620,21 @@ async function saveChildInfo(familyId, childInfo) {
       return;
     }
     
+    // Combine age_info into medical_record if available
+    let medicalRecord = childInfo.medical_record || null;
+    if (childInfo.age_info && !medicalRecord) {
+      medicalRecord = `年龄: ${childInfo.age_info}`;
+    } else if (childInfo.age_info && medicalRecord) {
+      medicalRecord = `${medicalRecord}; 年龄: ${childInfo.age_info}`;
+    }
+    
     // Log what we're trying to save
     console.log(`💾 Attempting to save child info for family ${familyId}:`, {
       child_name: childInfo.child_name || 'null',
       date_of_birth: childInfo.date_of_birth || 'null',
       gender: childInfo.gender || 'null',
-      medical_record: childInfo.medical_record || 'null'
+      medical_record: medicalRecord || 'null',
+      age_info: childInfo.age_info || 'null'
     });
     
     // Check if child already exists for this family
@@ -647,7 +661,7 @@ async function saveChildInfo(familyId, childInfo) {
           childInfo.child_name,
           childInfo.date_of_birth,
           childInfo.gender,
-          childInfo.medical_record,
+          medicalRecord,
           existing[0].id
         ]
       );
@@ -664,7 +678,7 @@ async function saveChildInfo(familyId, childInfo) {
             childInfo.child_name,
             childInfo.date_of_birth,
             childInfo.gender,
-            childInfo.medical_record
+            medicalRecord
           ]
         );
         console.log(`✅ Created new child record for family ${familyId} (ID: ${insertResult.rows[0].id})`);
@@ -754,15 +768,30 @@ async function handleChatMessage(familyId, userMessage) {
       // Continue with null childInfo
     }
     
+    // Parse age/birthday information accurately
+    let parsedAge = null;
+    if (extractedInfo.age_raw_text || extractedInfo.date_of_birth) {
+      parsedAge = parseAgeAndCalculate(extractedInfo.age_raw_text, extractedInfo.date_of_birth || childInfo?.date_of_birth);
+      if (parsedAge) {
+        console.log(`📊 Parsed age: ${parsedAge.years} years, ${parsedAge.months} months, ${parsedAge.days} days`);
+        if (parsedAge.date_of_birth) {
+          extractedInfo.date_of_birth = parsedAge.date_of_birth;
+        }
+      }
+    }
+    
     // Check if we extracted ANY new information (even just one field)
     const hasAnyNewInfo = extractedInfo.child_name || 
                          extractedInfo.date_of_birth || 
+                         extractedInfo.age_raw_text ||
                          extractedInfo.gender || 
                          extractedInfo.medical_record;
     
     console.log(`🔍 Checking extracted info:`, {
       child_name: extractedInfo.child_name,
       date_of_birth: extractedInfo.date_of_birth,
+      age_raw_text: extractedInfo.age_raw_text,
+      parsed_age: parsedAge,
       gender: extractedInfo.gender,
       medical_record: extractedInfo.medical_record,
       hasAnyNewInfo
@@ -775,14 +804,17 @@ async function handleChatMessage(familyId, userMessage) {
         // Merge extracted info with existing info (extracted info takes priority for new fields)
         const mergedInfo = {
           child_name: extractedInfo.child_name || childInfo?.child_name || null,
-          date_of_birth: extractedInfo.date_of_birth || childInfo?.date_of_birth || null,
+          date_of_birth: parsedAge?.date_of_birth || extractedInfo.date_of_birth || childInfo?.date_of_birth || null,
           gender: extractedInfo.gender || childInfo?.gender || null,
-          medical_record: extractedInfo.medical_record || childInfo?.medical_record || null
+          medical_record: extractedInfo.medical_record || childInfo?.medical_record || null,
+          // Store parsed age info in medical_record or as separate field
+          age_info: parsedAge ? `${parsedAge.years}岁${parsedAge.months}个月${parsedAge.days}天` : null
         };
         
         console.log(`📦 Merged info to save:`, mergedInfo);
         console.log(`📦 Extracted info:`, extractedInfo);
         console.log(`📦 Existing info:`, childInfo);
+        console.log(`📦 Parsed age:`, parsedAge);
         
         // Save immediately - this will create a record if none exists, or update existing one
         await saveChildInfo(familyId, mergedInfo);
