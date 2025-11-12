@@ -632,91 +632,48 @@ function extractChildInfo(messages) {
     }
   }
   
-  // Extract date of birth or age (supports multiple formats)
-  const dobPatterns = [
-    // Date formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY, YYYY/MM/DD
+  // Extract age/birthday information - store raw text for backend to parse accurately
+  const agePatterns = [
+    // Date formats - extract as-is
     /(?:born|birthday|date of birth|dob|出生|生日|出生日期) (?:on|is|是|在)?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/i,
     /(?:出生于|生日是|出生在)\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/i,
-    // Standalone date patterns (more specific)
     /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2})\b/,
-    // Age patterns (more comprehensive)
-    /(?:age|年龄) (?:is|of|是)?\s*(\d+)/i,
-    /(?:今年|现在|已经) (\d+) (?:岁|years? old)/i,
-    /(\d+) (?:years?|months?|days?|岁|个月|天) (?:old|age)?/i,
-    /(\d+) (?:岁|years? old)/i,
-    /(?:孩子|宝宝|儿子|女儿) (\d+) (?:岁|years? old)/i,
-    // More flexible age patterns
-    /(\d+)岁/i,
-    /(\d+) years? old/i,
-    /(?:今年|现在) (\d+)/i
+    // Age patterns - extract full context (capture more text for accurate parsing)
+    /(?:age|年龄) (?:is|of|是)?\s*([^，,。.！!？?\n]+)/i,
+    /(?:今年|现在|已经) ([^，,。.！!？?\n]*\d+[^，,。.！!？?\n]*(?:岁|years?|months?|days?|个月|天))/i,
+    /(\d+[^，,。.！!？?\n]*(?:years?|months?|days?|岁|个月|天|old|age))/i,
+    /(?:孩子|宝宝|儿子|女儿) ([^，,。.！!？?\n]*\d+[^，,。.！!？?\n]*(?:岁|years?|months?|days?|个月|天))/i,
+    /(\d+岁)/i,
+    /(\d+ years? old)/i,
+    /(\d+ months?)/i,
+    /(\d+ days?)/i,
+    /(\d+个月)/i,
+    /(\d+天)/i
   ];
   
-  for (const pattern of dobPatterns) {
+  for (const pattern of agePatterns) {
     const match = fullText.match(pattern);
     if (match && match[1]) {
-      const value = match[1].trim();
-      // If it's an age (just a number between 0-25), convert to approximate date of birth
-      if (/^\d+$/.test(value)) {
-        const ageNum = parseInt(value);
-        if (ageNum >= 0 && ageNum <= 25) {
-          const today = new Date();
-          // Calculate birth year: if birthday hasn't passed this year, subtract one more year
-          let birthYear = today.getFullYear() - ageNum;
-          
-          // Use current month and day as approximate (or January 1st if we want to be conservative)
-          // For more accuracy, we could use today's date minus the age
-          const birthMonth = today.getMonth() + 1; // 1-12
-          const birthDay = today.getDate();
-          
-          // Format as YYYY-MM-DD
-          info.date_of_birth = `${birthYear}-${String(birthMonth).padStart(2, '0')}-${String(birthDay).padStart(2, '0')}`;
-          console.log(`📅 Extracted age ${ageNum}, calculated approximate birth date: ${info.date_of_birth} (birth year: ${birthYear})`);
-          break;
-        }
-      } else if (value.includes('-') || value.includes('/')) {
-        // It's a date - normalize format
-        let normalizedDate = value.replace(/\//g, '-');
-        // Ensure YYYY-MM-DD format
+      const rawText = match[1].trim();
+      // Store raw text - backend will parse it accurately
+      info.age_raw_text = rawText;
+      console.log(`📅 Extracted age/birthday raw text: "${rawText}"`);
+      
+      // Also try to extract date if it's a clear date format
+      if (rawText.includes('-') || rawText.includes('/')) {
+        let normalizedDate = rawText.replace(/\//g, '-');
         const parts = normalizedDate.split('-');
-        if (parts.length === 3) {
-          // If first part is 4 digits, it's YYYY-MM-DD
-          if (parts[0].length === 4) {
-            // Validate and format: YYYY-MM-DD
-            const year = parseInt(parts[0]);
-            const month = parseInt(parts[1]);
-            const day = parseInt(parts[2]);
-            
-            // Validate date
-            if (year >= 1900 && year <= new Date().getFullYear() && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-              info.date_of_birth = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              console.log(`📅 Extracted date of birth: ${info.date_of_birth}`);
-              break;
-            } else {
-              console.warn(`⚠️  Invalid date values: ${year}-${month}-${day}`);
-            }
-          } else {
-            // Might be MM-DD-YYYY or DD-MM-YYYY, try to parse
-            const yearIdx = parts.findIndex(p => p.length === 4);
-            if (yearIdx >= 0) {
-              // Reorder to YYYY-MM-DD
-              const year = parseInt(parts[yearIdx]);
-              const month = parseInt(yearIdx === 0 ? parts[1] : parts[0]);
-              const day = parseInt(yearIdx === 2 ? parts[1] : parts[2]);
-              
-              // Validate date
-              if (year >= 1900 && year <= new Date().getFullYear() && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-                info.date_of_birth = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                console.log(`📅 Extracted date of birth: ${info.date_of_birth}`);
-                break;
-              } else {
-                console.warn(`⚠️  Invalid date values: ${year}-${month}-${day}`);
-              }
-            } else {
-              console.warn(`⚠️  Could not parse date format: ${normalizedDate}`);
-            }
+        if (parts.length === 3 && parts[0].length === 4) {
+          const year = parseInt(parts[0]);
+          const month = parseInt(parts[1]);
+          const day = parseInt(parts[2]);
+          if (year >= 1900 && year <= new Date().getFullYear() && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            info.date_of_birth = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            console.log(`📅 Also extracted date of birth: ${info.date_of_birth}`);
           }
         }
       }
+      break;
     }
   }
   
