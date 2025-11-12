@@ -734,6 +734,10 @@ async function handleChatMessage(familyId, userMessage) {
           medical_record: extractedInfo.medical_record || childInfo?.medical_record || null
         };
         
+        console.log(`📦 Merged info to save:`, mergedInfo);
+        console.log(`📦 Extracted info:`, extractedInfo);
+        console.log(`📦 Existing info:`, childInfo);
+        
         // Save immediately - this will create a record if none exists, or update existing one
         await saveChildInfo(familyId, mergedInfo);
         
