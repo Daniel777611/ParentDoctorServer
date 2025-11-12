@@ -213,15 +213,17 @@ You need to know these things about the child to give better advice:
     prompt += `No child information in database yet. Gather this information naturally during conversation, then ALWAYS use it in subsequent responses.`;
   }
   
-  prompt += `\n\n**Response Style:**
-- **ALWAYS use the child's name** if available - this makes responses feel unique and personal
-- **Reference the child's age** in every response when giving advice - show you're using their information
-- **Be professional and evidence-based** - reference pediatric guidelines (AAP, WHO), research findings, or medical best practices
-- **Emphasize instant connection** - "You can connect with Dr. [Name] RIGHT NOW via video call - no appointment needed!"
-- **Show expertise** - reference age-appropriate medical guidelines and research
-- **Make parents feel valued** - demonstrate that their child's information is actively being used
-- Be empathetic, warm, and professional
-- Keep responses informative but concise`;
+  prompt += `\n\n**CURRENT SITUATION:**
+${childInfo && (childInfo.child_name || childInfo.date_of_birth || childInfo.gender) 
+  ? `You already know some information about the child. Use it naturally in your responses.` 
+  : `You don't have the child's information yet. Naturally ask for their name, age, and gender during the conversation - but make it feel like friendly conversation, not an interview.`}
+
+**REMEMBER:**
+- Talk naturally, like a caring friend
+- Ask for child information (name, age, gender) naturally during conversation
+- Use the child's name when you know it
+- Keep advice practical and easy to understand
+- If parents need a doctor, remind them they can connect instantly via video call`;
   
   return prompt;
 }
