@@ -112,8 +112,22 @@ function calculateAge(dateOfBirth) {
  * Build system prompt for AI assistant
  */
 async function buildSystemPrompt(familyId) {
-  const childInfo = await getChildInfo(familyId);
-  const doctors = await getAvailableDoctors();
+  let childInfo = null;
+  let doctors = [];
+  
+  try {
+    childInfo = await getChildInfo(familyId);
+  } catch (err) {
+    console.error("❌ Error fetching child info in buildSystemPrompt:", err.message);
+    // Continue with null childInfo
+  }
+  
+  try {
+    doctors = await getAvailableDoctors();
+  } catch (err) {
+    console.error("❌ Error fetching doctors in buildSystemPrompt:", err.message);
+    // Continue with empty doctors array
+  }
   
   let prompt = `You are a professional pediatric health assistant for ParentDoctor, a revolutionary platform that connects parents with pediatric doctors INSTANTLY - no appointments needed, immediate video consultations available.
 
@@ -514,6 +528,12 @@ function extractChildInfo(messages) {
  */
 async function saveChildInfo(familyId, childInfo) {
   try {
+    // Validate familyId
+    if (!familyId) {
+      console.error("❌ Cannot save child info: familyId is required");
+      return;
+    }
+    
     // Check if child already exists for this family
     // We check by family_id only, since we want to update the same child record
     const { rows: existing } = await pool.query(
@@ -544,22 +564,28 @@ async function saveChildInfo(familyId, childInfo) {
       );
       console.log(`✅ Updated child info for family ${familyId}`);
     } else {
-      // Insert new
-      await pool.query(
-        `INSERT INTO child (family_id, child_name, date_of_birth, gender, medical_record, extracted_from_chat)
-         VALUES ($1, $2, $3, $4, $5, TRUE)`,
-        [
-          familyId,
-          childInfo.child_name,
-          childInfo.date_of_birth,
-          childInfo.gender,
-          childInfo.medical_record
-        ]
-      );
-      console.log(`✅ Saved child info for family ${familyId}`);
+      // Insert new - only insert if we have at least one piece of information
+      if (childInfo.child_name || childInfo.date_of_birth || childInfo.gender || childInfo.medical_record) {
+        await pool.query(
+          `INSERT INTO child (family_id, child_name, date_of_birth, gender, medical_record, extracted_from_chat)
+           VALUES ($1, $2, $3, $4, $5, TRUE)`,
+          [
+            familyId,
+            childInfo.child_name,
+            childInfo.date_of_birth,
+            childInfo.gender,
+            childInfo.medical_record
+          ]
+        );
+        console.log(`✅ Saved child info for family ${familyId}`);
+      } else {
+        console.log(`⚠️  Skipping save: no child information to save for family ${familyId}`);
+      }
     }
   } catch (err) {
     console.error("❌ Error saving child info:", err.message);
+    console.error("❌ Error stack:", err.stack);
+    // Don't throw - allow the chat to continue even if save fails
   }
 }
 
@@ -568,17 +594,32 @@ async function saveChildInfo(familyId, childInfo) {
  */
 async function handleChatMessage(familyId, userMessage) {
   try {
+    // Validate inputs
+    if (!familyId) {
+      throw new Error("Family ID is required");
+    }
+    if (!userMessage || !userMessage.trim()) {
+      throw new Error("Message is required");
+    }
+    
     // Get conversation history
     const history = getConversationHistory(familyId);
     
     // Add user message to history
     history.push({
       role: "user",
-      content: userMessage
+      content: userMessage.trim()
     });
     
-    // Build system prompt
-    const systemPrompt = await buildSystemPrompt(familyId);
+    // Build system prompt (with error handling)
+    let systemPrompt;
+    try {
+      systemPrompt = await buildSystemPrompt(familyId);
+    } catch (err) {
+      console.error("❌ Error building system prompt:", err.message);
+      // Use a basic fallback prompt
+      systemPrompt = `You are a helpful pediatric health assistant for ParentDoctor. Provide professional, evidence-based health advice to parents.`;
+    }
     
     // Prepare messages for AI
     const messages = [
@@ -586,8 +627,17 @@ async function handleChatMessage(familyId, userMessage) {
       ...history.slice(-10) // Keep last 10 messages for context
     ];
     
-    // Get AI response
-    const aiResponse = await callAI(messages, familyId);
+    // Get AI response (with error handling)
+    let aiResponse;
+    try {
+      aiResponse = await callAI(messages, familyId);
+      if (!aiResponse || !aiResponse.trim()) {
+        aiResponse = "I apologize, but I'm having trouble processing your message. Could you please rephrase your question?";
+      }
+    } catch (err) {
+      console.error("❌ Error calling AI:", err.message);
+      aiResponse = "I apologize, but I'm experiencing technical difficulties. Please try again in a moment.";
+    }
     
     // Add AI response to history
     history.push({
@@ -595,11 +645,23 @@ async function handleChatMessage(familyId, userMessage) {
       content: aiResponse
     });
     
-    // Extract child information from conversation
-    const extractedInfo = extractChildInfo(history);
+    // Extract child information from conversation (with error handling)
+    let extractedInfo = { child_name: null, date_of_birth: null, gender: null, medical_record: null };
+    try {
+      extractedInfo = extractChildInfo(history);
+    } catch (err) {
+      console.error("❌ Error extracting child info:", err.message);
+      // Continue with empty extractedInfo
+    }
     
-    // Get current child info from database
-    const childInfo = await getChildInfo(familyId);
+    // Get current child info from database (with error handling)
+    let childInfo = null;
+    try {
+      childInfo = await getChildInfo(familyId);
+    } catch (err) {
+      console.error("❌ Error fetching child info:", err.message);
+      // Continue with null childInfo
+    }
     
     // Check if we extracted ANY new information (even just one field)
     const hasAnyNewInfo = extractedInfo.child_name || 
@@ -609,26 +671,31 @@ async function handleChatMessage(familyId, userMessage) {
     
     // If we extracted any information, save it immediately to start/update the child record
     if (hasAnyNewInfo) {
-      // Merge extracted info with existing info (extracted info takes priority for new fields)
-      const mergedInfo = {
-        child_name: extractedInfo.child_name || childInfo?.child_name || null,
-        date_of_birth: extractedInfo.date_of_birth || childInfo?.date_of_birth || null,
-        gender: extractedInfo.gender || childInfo?.gender || null,
-        medical_record: extractedInfo.medical_record || childInfo?.medical_record || null
-      };
-      
-      // Save immediately - this will create a record if none exists, or update existing one
-      await saveChildInfo(familyId, mergedInfo);
-      
-      // Log what was extracted and saved
-      const extractedFields = [];
-      if (extractedInfo.child_name) extractedFields.push(`name: ${extractedInfo.child_name}`);
-      if (extractedInfo.date_of_birth) extractedFields.push(`date_of_birth: ${extractedInfo.date_of_birth}`);
-      if (extractedInfo.gender) extractedFields.push(`gender: ${extractedInfo.gender}`);
-      if (extractedInfo.medical_record) extractedFields.push(`medical_record: ${extractedInfo.medical_record}`);
-      
-      console.log(`✅ Child record created/updated for family ${familyId}. Extracted: ${extractedFields.join(', ')}`);
-      console.log(`📋 Current child record:`, mergedInfo);
+      try {
+        // Merge extracted info with existing info (extracted info takes priority for new fields)
+        const mergedInfo = {
+          child_name: extractedInfo.child_name || childInfo?.child_name || null,
+          date_of_birth: extractedInfo.date_of_birth || childInfo?.date_of_birth || null,
+          gender: extractedInfo.gender || childInfo?.gender || null,
+          medical_record: extractedInfo.medical_record || childInfo?.medical_record || null
+        };
+        
+        // Save immediately - this will create a record if none exists, or update existing one
+        await saveChildInfo(familyId, mergedInfo);
+        
+        // Log what was extracted and saved
+        const extractedFields = [];
+        if (extractedInfo.child_name) extractedFields.push(`name: ${extractedInfo.child_name}`);
+        if (extractedInfo.date_of_birth) extractedFields.push(`date_of_birth: ${extractedInfo.date_of_birth}`);
+        if (extractedInfo.gender) extractedFields.push(`gender: ${extractedInfo.gender}`);
+        if (extractedInfo.medical_record) extractedFields.push(`medical_record: ${extractedInfo.medical_record}`);
+        
+        console.log(`✅ Child record created/updated for family ${familyId}. Extracted: ${extractedFields.join(', ')}`);
+        console.log(`📋 Current child record:`, mergedInfo);
+      } catch (err) {
+        console.error("❌ Error saving child info in handleChatMessage:", err.message);
+        // Don't throw - allow the chat response to be returned even if save fails
+      }
     }
     
     return {
@@ -637,6 +704,7 @@ async function handleChatMessage(familyId, userMessage) {
     };
   } catch (err) {
     console.error("❌ Error handling chat message:", err.message);
+    console.error("❌ Error stack:", err.stack);
     throw err;
   }
 }
