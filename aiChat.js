@@ -302,9 +302,10 @@ async function buildSystemPrompt(familyId) {
 You need to know these things about the child to give better advice:
 - **Child's name** (e.g., "What's your child's name?" or "How should I call your little one?")
 - **Age or birthday** (e.g., "How old is [name]?" or "When was [name] born?")
-  - **CRITICAL**: When the parent tells you about age/birthday, repeat it back EXACTLY as they said it. Do NOT calculate or convert it yourself. Just acknowledge what they said.
-  - Example: If parent says "he's 3 months old", you say "I see, [name] is 3 months old" - don't convert to days or years.
-  - Example: If parent says "born on 10-10-2025", you say "Got it, [name] was born on October 10, 2025" - don't calculate the age.
+  - **CRITICAL**: When the parent tells you about age/birthday, acknowledge what they said, but then use the ACCURATE calculated age from the database in your responses.
+  - Example: If parent says "he's 3 months old", you acknowledge "I see, [name] is 3 months old", but then use the accurate age from database (e.g., "For [name] who is 0岁3个月5天...")
+  - Example: If parent says "born on 10-10-2025", you acknowledge "Got it, [name] was born on October 10, 2025", but then use the accurate calculated age from database.
+  - **ALWAYS use the accurate age information provided in the "Current Child Information" section below when giving advice.**
 - **Gender** (e.g., "Is [name] a boy or a girl?")
 
 **HOW TO ASK FOR INFORMATION:**
@@ -339,7 +340,28 @@ You need to know these things about the child to give better advice:
   prompt += `\n\n**Current Child Information in Database (USE THIS IN EVERY RESPONSE):**\n`;
   
   if (childInfo) {
-    const age = childInfo.date_of_birth ? calculateAge(childInfo.date_of_birth) : null;
+    // Calculate accurate age (years, months, days) from date of birth
+    let accurateAge = null;
+    if (childInfo.date_of_birth) {
+      accurateAge = calculateAgeFromDate(childInfo.date_of_birth);
+    }
+    
+    // Also try to extract age from medical_record if available (format: "年龄: X岁Y个月Z天")
+    let ageFromRecord = null;
+    if (childInfo.medical_record) {
+      const ageMatch = childInfo.medical_record.match(/年龄[：:]\s*(\d+)岁(\d+)个月(\d+)天/);
+      if (ageMatch) {
+        ageFromRecord = {
+          years: parseInt(ageMatch[1]),
+          months: parseInt(ageMatch[2]),
+          days: parseInt(ageMatch[3])
+        };
+      }
+    }
+    
+    // Use age from medical_record if available, otherwise use calculated age
+    const finalAge = ageFromRecord || accurateAge;
+    
     const childName = childInfo.child_name || null;
     const gender = childInfo.gender || null;
     
@@ -349,8 +371,18 @@ You need to know these things about the child to give better advice:
       prompt += `- Name: Not provided yet\n`;
     }
     
-    if (childInfo.date_of_birth && age !== null) {
-      prompt += `- **Age: ${age} years old** (Born: ${childInfo.date_of_birth}) - ALWAYS reference this age when giving advice\n`;
+    if (finalAge) {
+      const ageText = `${finalAge.years}岁${finalAge.months}个月${finalAge.days}天`;
+      const ageTextEnglish = finalAge.years > 0 
+        ? `${finalAge.years} year${finalAge.years > 1 ? 's' : ''}${finalAge.months > 0 ? `, ${finalAge.months} month${finalAge.months > 1 ? 's' : ''}` : ''}${finalAge.days > 0 ? `, ${finalAge.days} day${finalAge.days > 1 ? 's' : ''}` : ''} old`
+        : finalAge.months > 0
+        ? `${finalAge.months} month${finalAge.months > 1 ? 's' : ''}${finalAge.days > 0 ? `, ${finalAge.days} day${finalAge.days > 1 ? 's' : ''}` : ''} old`
+        : `${finalAge.days} day${finalAge.days > 1 ? 's' : ''} old`;
+      
+      prompt += `- **Age: ${ageText}** (${ageTextEnglish}) - Born: ${childInfo.date_of_birth || 'date calculated from age'}\n`;
+      prompt += `  **IMPORTANT**: Use this EXACT age information (${ageText}) when giving advice. For example: "For ${childName} who is ${ageText}, I recommend..." or "Since ${childName} is ${ageText}, this is important because..."\n`;
+    } else if (childInfo.date_of_birth) {
+      prompt += `- **Date of Birth: ${childInfo.date_of_birth}** - Age calculation pending\n`;
     } else {
       prompt += `- Age: Not provided yet\n`;
     }
@@ -365,13 +397,14 @@ You need to know these things about the child to give better advice:
       prompt += `- Previous Medical Notes: ${childInfo.medical_record}\n`;
     }
     
-    // Add personalized response examples
-    if (childName && age !== null) {
-      prompt += `\n**EXAMPLE PERSONALIZED RESPONSES:**
-- "Based on ${childName}'s age of ${age} years, research shows that..."
-- "For a ${age}-year-old ${gender || 'child'} like ${childName}, the American Academy of Pediatrics recommends..."
-- "Given that ${childName} is ${age} years old, here's what pediatric guidelines suggest..."
-- "Since ${childName} is ${age} years old, this is particularly important because..."`;
+    // Add personalized response examples with accurate age
+    if (childName && finalAge) {
+      const ageText = `${finalAge.years}岁${finalAge.months}个月${finalAge.days}天`;
+      prompt += `\n**EXAMPLE PERSONALIZED RESPONSES (use the exact age ${ageText}):**
+- "For ${childName} who is ${ageText}, I recommend..."
+- "Since ${childName} is ${ageText}, this is important because..."
+- "Given that ${childName} is ${ageText}, here's what you should know..."
+- "For a ${finalAge.years > 0 ? `${finalAge.years}-year-old` : finalAge.months > 0 ? `${finalAge.months}-month-old` : `${finalAge.days}-day-old`} like ${childName}..."`;
     }
   } else {
     prompt += `No child information in database yet. Gather this information naturally during conversation, then ALWAYS use it in subsequent responses.`;
@@ -894,43 +927,17 @@ async function handleChatMessage(familyId, userMessage) {
       hasAnyNewInfo
     });
     
-    // If we extracted any information, save it immediately to start/update the child record
+    // Log what was extracted (info was already saved before building prompt)
     if (hasAnyNewInfo) {
-      console.log(`💾 Saving child info to database for family ${familyId}...`);
-      try {
-        // Merge extracted info with existing info (extracted info takes priority for new fields)
-        const mergedInfo = {
-          child_name: extractedInfo.child_name || childInfo?.child_name || null,
-          date_of_birth: parsedAge?.date_of_birth || extractedInfo.date_of_birth || childInfo?.date_of_birth || null,
-          gender: extractedInfo.gender || childInfo?.gender || null,
-          medical_record: extractedInfo.medical_record || childInfo?.medical_record || null,
-          // Store parsed age info in medical_record or as separate field
-          age_info: parsedAge ? `${parsedAge.years}岁${parsedAge.months}个月${parsedAge.days}天` : null
-        };
-        
-        console.log(`📦 Merged info to save:`, mergedInfo);
-        console.log(`📦 Extracted info:`, extractedInfo);
-        console.log(`📦 Existing info:`, childInfo);
-        console.log(`📦 Parsed age:`, parsedAge);
-        
-        // Save immediately - this will create a record if none exists, or update existing one
-        await saveChildInfo(familyId, mergedInfo);
-        
-        // Log what was extracted and saved
-        const extractedFields = [];
-        if (extractedInfo.child_name) extractedFields.push(`name: ${extractedInfo.child_name}`);
-        if (extractedInfo.date_of_birth) extractedFields.push(`date_of_birth: ${extractedInfo.date_of_birth}`);
-        if (extractedInfo.age_raw_text) extractedFields.push(`age_raw_text: "${extractedInfo.age_raw_text}"`);
-        if (parsedAge) extractedFields.push(`parsed_age: ${parsedAge.years}岁${parsedAge.months}个月${parsedAge.days}天`);
-        if (extractedInfo.gender) extractedFields.push(`gender: ${extractedInfo.gender}`);
-        if (extractedInfo.medical_record) extractedFields.push(`medical_record: ${extractedInfo.medical_record}`);
-        
-        console.log(`✅ Child record created/updated for family ${familyId}. Extracted: ${extractedFields.join(', ')}`);
-        console.log(`📋 Current child record:`, mergedInfo);
-      } catch (err) {
-        console.error("❌ Error saving child info in handleChatMessage:", err.message);
-        // Don't throw - allow the chat response to be returned even if save fails
-      }
+      const extractedFields = [];
+      if (extractedInfo.child_name) extractedFields.push(`name: ${extractedInfo.child_name}`);
+      if (extractedInfo.date_of_birth) extractedFields.push(`date_of_birth: ${extractedInfo.date_of_birth}`);
+      if (extractedInfo.age_raw_text) extractedFields.push(`age_raw_text: "${extractedInfo.age_raw_text}"`);
+      if (parsedAge) extractedFields.push(`parsed_age: ${parsedAge.years}岁${parsedAge.months}个月${parsedAge.days}天`);
+      if (extractedInfo.gender) extractedFields.push(`gender: ${extractedInfo.gender}`);
+      if (extractedInfo.medical_record) extractedFields.push(`medical_record: ${extractedInfo.medical_record}`);
+      
+      console.log(`✅ Child info extracted and saved for family ${familyId}. Extracted: ${extractedFields.join(', ')}`);
     }
     
     return {
