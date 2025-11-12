@@ -699,10 +699,21 @@ app.post("/api/parent/verify/send-code", async (req, res) => {
     
     // Send verification code
     if (email) {
+      // 🔐 DEVELOPMENT ONLY: Log verification code for testing (remove in production)
+      // This helps debug when email service is not configured
+      console.log(`🔐 [DEV] Verification code for ${email}: ${code}`);
+      
       const sent = await sendVerificationCode(email, code);
       if (!sent) {
-        return res.status(500).json({ success: false, message: "Failed to send verification code. Please try again." });
+        console.error(`❌ Failed to send verification code to ${email}. Check email service configuration.`);
+        console.error(`   Verification code (for testing): ${code}`);
+        return res.status(500).json({ 
+          success: false, 
+          message: "Failed to send verification code. Please check your email service configuration or try again later. Check server logs for verification code (development mode).",
+          error: "Email service not configured or failed to send"
+        });
       }
+      console.log(`✅ Verification code sent to ${email}`);
     } else if (phone) {
       // TODO: Implement SMS sending via Twilio
       console.log(`📱 SMS verification code for ${phone}: ${code}`);
