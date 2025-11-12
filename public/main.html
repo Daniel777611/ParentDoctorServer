@@ -1480,12 +1480,154 @@
       document.getElementById('languageBtn').textContent = next;
     });
 
-    // Simulate incoming call (for testing)
-    // In production, this will be triggered by WebSocket or API
-    setTimeout(() => {
-      // Simulate call after 3 seconds for demo
-      // setState(true);
-    }, 3000);
+    // WebSocket connection for video calls
+    let ws = null;
+    let doctorId = null;
+    let currentCallOffer = null;
+    let currentCallFrom = null;
+    
+    // Get doctor ID from session
+    const doctorData = JSON.parse(sessionStorage.getItem('doctorData') || '{}');
+    doctorId = doctorData.doctor_id || null;
+    
+    function connectWebSocket() {
+      if (!doctorId) {
+        console.log('⚠️ No doctor ID, cannot connect WebSocket');
+        return;
+      }
+      
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected');
+        // Register with doctor ID
+        ws.send(JSON.stringify({
+          type: 'register',
+          id: doctorId
+        }));
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          
+          if (msg.type === 'registered') {
+            console.log('✅ Registered with WebSocket, ID:', msg.id);
+          } else if (msg.type === 'signal' && msg.payload) {
+            // Check if this is an incoming call (offer)
+            if (msg.payload.offer) {
+              handleIncomingCall(msg.from, msg.payload.offer);
+            } else if (msg.payload.answer) {
+              // Answer received (shouldn't happen for doctor, but handle it)
+              console.log('📨 Answer received');
+            } else if (msg.payload.candidate) {
+              // ICE candidate received
+              console.log('🧊 ICE candidate received');
+            }
+          }
+        } catch (err) {
+          console.error('❌ Error parsing WebSocket message:', err);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+      };
+      
+      ws.onclose = () => {
+        console.log('📴 WebSocket closed, reconnecting...');
+        // Reconnect after 3 seconds
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+    
+    function handleIncomingCall(from, offer) {
+      console.log('📞 Incoming call from:', from);
+      currentCallOffer = offer;
+      currentCallFrom = from;
+      
+      // Show incoming call notification
+      const overlay = document.getElementById('incomingCallOverlay');
+      const nameEl = document.getElementById('incomingCallName');
+      const statusEl = document.getElementById('incomingCallStatus');
+      
+      // Set caller info (you can fetch parent info from API if needed)
+      nameEl.textContent = 'Parent Calling';
+      statusEl.textContent = 'Incoming video call...';
+      
+      overlay.style.display = 'flex';
+    }
+    
+    function acceptCall() {
+      if (!currentCallOffer || !currentCallFrom) {
+        console.error('❌ No call offer to accept');
+        return;
+      }
+      
+      console.log('✅ Accepting call from:', currentCallFrom);
+      
+      // Hide incoming call overlay
+      document.getElementById('incomingCallOverlay').style.display = 'none';
+      
+      // TODO: Create WebRTC answer and send it back
+      // For now, just set state to connected
+      setState(true);
+      
+      // Send answer back (simplified - you'll need to implement full WebRTC answer)
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        // This is a placeholder - you'll need to create actual WebRTC answer
+        ws.send(JSON.stringify({
+          type: 'signal',
+          from: doctorId,
+          to: currentCallFrom,
+          payload: {
+            answer: {
+              type: 'answer',
+              sdp: 'placeholder-sdp' // Replace with actual SDP
+            }
+          }
+        }));
+      }
+      
+      // Clear call data
+      currentCallOffer = null;
+      currentCallFrom = null;
+    }
+    
+    function rejectCall() {
+      console.log('❌ Rejecting call from:', currentCallFrom);
+      
+      // Hide incoming call overlay
+      document.getElementById('incomingCallOverlay').style.display = 'none';
+      
+      // Send rejection signal (optional)
+      if (ws && ws.readyState === WebSocket.OPEN && currentCallFrom) {
+        ws.send(JSON.stringify({
+          type: 'signal',
+          from: doctorId,
+          to: currentCallFrom,
+          payload: {
+            reject: true
+          }
+        }));
+      }
+      
+      // Clear call data
+      currentCallOffer = null;
+      currentCallFrom = null;
+    }
+    
+    // Setup call buttons
+    document.getElementById('acceptCallBtn').addEventListener('click', acceptCall);
+    document.getElementById('rejectCallBtn').addEventListener('click', rejectCall);
+    
+    // Connect WebSocket on page load
+    if (doctorId) {
+      connectWebSocket();
+    }
 
     // Function to simulate call connection (for testing)
     window.simulateCall = function() {
@@ -1495,9 +1637,13 @@
     // Function to end call
     window.endCall = function() {
       setState(false);
+      // Close WebRTC connection if needed
     };
 
     function logout() {
+      if (ws) {
+        ws.close();
+      }
       sessionStorage.removeItem('doctorLoggedIn');
       sessionStorage.removeItem('doctorData');
       window.location.href = '/signin.html';
