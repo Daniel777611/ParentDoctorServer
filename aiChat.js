@@ -514,14 +514,14 @@ function extractChildInfo(messages) {
  */
 async function saveChildInfo(familyId, childInfo) {
   try {
-    // Check if child already exists
+    // Check if child already exists for this family
+    // We check by family_id only, since we want to update the same child record
     const { rows: existing } = await pool.query(
       `SELECT id FROM child 
        WHERE family_id = $1 
-       AND (child_name = $2 OR child_name IS NULL)
        ORDER BY created_at DESC 
        LIMIT 1`,
-      [familyId, childInfo.child_name]
+      [familyId]
     );
     
     if (existing.length > 0) {
@@ -601,35 +601,45 @@ async function handleChatMessage(familyId, userMessage) {
     // Get current child info from database
     const childInfo = await getChildInfo(familyId);
     
-    // Merge extracted info with existing info (extracted info takes priority for new fields)
-    const mergedInfo = {
-      child_name: extractedInfo.child_name || childInfo?.child_name || null,
-      date_of_birth: extractedInfo.date_of_birth || childInfo?.date_of_birth || null,
-      gender: extractedInfo.gender || childInfo?.gender || null,
-      medical_record: extractedInfo.medical_record || childInfo?.medical_record || null
-    };
+    // Check if we extracted ANY new information (even just one field)
+    const hasAnyNewInfo = extractedInfo.child_name || 
+                         extractedInfo.date_of_birth || 
+                         extractedInfo.gender || 
+                         extractedInfo.medical_record;
     
-    // Check if we have any new information to save
-    let hasNewInfo = false;
-    if (extractedInfo.child_name && (!childInfo || !childInfo.child_name)) {
-      hasNewInfo = true;
-    }
-    if (extractedInfo.date_of_birth && (!childInfo || !childInfo.date_of_birth)) {
-      hasNewInfo = true;
-    }
-    if (extractedInfo.gender && (!childInfo || !childInfo.gender)) {
-      hasNewInfo = true;
-    }
-    
-    // Save if we have at least one piece of new information
-    if (hasNewInfo && (mergedInfo.child_name || mergedInfo.date_of_birth || mergedInfo.gender)) {
+    // If we extracted any information, save it immediately to start/update the child record
+    if (hasAnyNewInfo) {
+      // Merge extracted info with existing info (extracted info takes priority for new fields)
+      const mergedInfo = {
+        child_name: extractedInfo.child_name || childInfo?.child_name || null,
+        date_of_birth: extractedInfo.date_of_birth || childInfo?.date_of_birth || null,
+        gender: extractedInfo.gender || childInfo?.gender || null,
+        medical_record: extractedInfo.medical_record || childInfo?.medical_record || null
+      };
+      
+      // Save immediately - this will create a record if none exists, or update existing one
       await saveChildInfo(familyId, mergedInfo);
-      console.log(`✅ Saved/updated child info:`, mergedInfo);
+      
+      // Log what was extracted and saved
+      const extractedFields = [];
+      if (extractedInfo.child_name) extractedFields.push(`name: ${extractedInfo.child_name}`);
+      if (extractedInfo.date_of_birth) extractedFields.push(`date_of_birth: ${extractedInfo.date_of_birth}`);
+      if (extractedInfo.gender) extractedFields.push(`gender: ${extractedInfo.gender}`);
+      if (extractedInfo.medical_record) extractedFields.push(`medical_record: ${extractedInfo.medical_record}`);
+      
+      console.log(`✅ Child record created/updated for family ${familyId}. Extracted: ${extractedFields.join(', ')}`);
+      console.log(`📋 Current child record:`, mergedInfo);
     }
+    
+    // Return extracted info if we saved anything
+    const hasAnyNewInfo = extractedInfo.child_name || 
+                         extractedInfo.date_of_birth || 
+                         extractedInfo.gender || 
+                         extractedInfo.medical_record;
     
     return {
       response: aiResponse,
-      extractedInfo: hasNewInfo ? extractedInfo : null
+      extractedInfo: hasAnyNewInfo ? extractedInfo : null
     };
   } catch (err) {
     console.error("❌ Error handling chat message:", err.message);
