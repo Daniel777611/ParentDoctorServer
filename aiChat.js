@@ -50,36 +50,127 @@ async function getChildInfo(familyId) {
 }
 
 /**
+ * Get available doctors from database
+ */
+async function getAvailableDoctors() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT doctor_id, first_name, last_name, nation, major, avatar, verified
+       FROM doctor 
+       WHERE verified = TRUE AND ai_review_status = 'approved'
+       ORDER BY created_at DESC
+       LIMIT 10`
+    );
+    return rows;
+  } catch (err) {
+    console.error("❌ Error fetching doctors:", err.message);
+    return [];
+  }
+}
+
+/**
+ * Calculate age from date of birth
+ */
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) return null;
+  
+  try {
+    // Try to parse different date formats
+    let birthDate;
+    if (dateOfBirth.includes('-')) {
+      birthDate = new Date(dateOfBirth);
+    } else if (dateOfBirth.includes('/')) {
+      const parts = dateOfBirth.split('/');
+      if (parts.length === 3) {
+        // Assume MM/DD/YYYY or DD/MM/YYYY
+        birthDate = new Date(parts[2], parts[0] - 1, parts[1]);
+      }
+    } else {
+      birthDate = new Date(dateOfBirth);
+    }
+    
+    if (isNaN(birthDate.getTime())) {
+      return null;
+    }
+    
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  } catch (err) {
+    console.error("❌ Error calculating age:", err.message);
+    return null;
+  }
+}
+
+/**
  * Build system prompt for AI assistant
  */
 async function buildSystemPrompt(familyId) {
   const childInfo = await getChildInfo(familyId);
+  const doctors = await getAvailableDoctors();
   
-  let prompt = `You are a helpful pediatric health assistant for ParentDoctor app. Your role is to:
-1. Provide general health advice and guidance to parents
-2. Ask questions to gather information about their child when needed
-3. Extract and remember child information from conversations
+  let prompt = `You are a helpful pediatric health assistant for ParentDoctor, a platform connecting parents with pediatric doctors. Your role is to:
 
-IMPORTANT: Before giving specific health advice, you should ask about:
-- Child's name
-- Child's date of birth (or age)
-- Child's gender
-- Current symptoms or concerns
+1. **Provide health advice**: Give helpful, general health guidance to parents about their children
+2. **Recommend doctors**: When appropriate, recommend doctors from our database (see available doctors below)
+3. **Gather child information naturally**: Ask about the child's information in a conversational way, but don't be too pushy. If the parent mentions their child's name, age, birthday, or gender naturally, remember it.
+4. **Be part of the product**: You are an integral part of ParentDoctor. You can see our database of verified pediatric doctors and recommend them when parents need professional consultation.
 
-When you have enough information, provide helpful, general health advice. Always remind parents that for serious concerns, they should consult with a doctor.
+**IMPORTANT GUIDELINES:**
+- Ask questions naturally in conversation, not like a form. For example: "To give you the best advice, could you tell me a bit about your child? What's their name and how old are they?"
+- If the parent mentions their child's information naturally, acknowledge it and remember it
+- When recommending doctors, mention specific doctors from our database by name
+- Always be friendly, empathetic, and helpful
+- For serious health concerns, strongly recommend connecting with one of our doctors
 
-Current child information in database: `;
+**Available Doctors in Database:**\n`;
   
-  if (childInfo) {
-    prompt += `\n- Name: ${childInfo.child_name || 'Not provided'}\n`;
-    prompt += `- Date of Birth: ${childInfo.date_of_birth || 'Not provided'}\n`;
-    prompt += `- Gender: ${childInfo.gender || 'Not provided'}\n`;
-    prompt += `- Medical Record: ${childInfo.medical_record || 'None'}\n`;
+  if (doctors.length > 0) {
+    doctors.forEach((doc, index) => {
+      const fullName = `${doc.first_name} ${doc.last_name}`;
+      const specialty = doc.major || 'Pediatrics';
+      const location = doc.nation || 'Location not specified';
+      prompt += `${index + 1}. Dr. ${fullName} - ${specialty} (${location})\n`;
+    });
+    prompt += `\nYou can recommend these doctors when parents need professional consultation.`;
   } else {
-    prompt += `\nNo child information in database yet. Please ask the parent for this information.`;
+    prompt += `\nNo doctors available in database yet.`;
   }
   
-  prompt += `\n\nKeep your responses concise, friendly, and helpful. Ask one question at a time.`;
+  prompt += `\n\n**Current Child Information in Database:**\n`;
+  
+  if (childInfo) {
+    const age = childInfo.date_of_birth ? calculateAge(childInfo.date_of_birth) : null;
+    prompt += `- Name: ${childInfo.child_name || 'Not provided'}\n`;
+    if (childInfo.date_of_birth) {
+      prompt += `- Date of Birth: ${childInfo.date_of_birth}`;
+      if (age !== null) {
+        prompt += ` (Age: ${age} years old)`;
+      }
+      prompt += `\n`;
+    } else {
+      prompt += `- Date of Birth: Not provided\n`;
+    }
+    prompt += `- Gender: ${childInfo.gender || 'Not provided'}\n`;
+    if (childInfo.medical_record) {
+      prompt += `- Previous Medical Notes: ${childInfo.medical_record}\n`;
+    }
+  } else {
+    prompt += `No child information in database yet. Gather this information naturally during conversation.\n`;
+  }
+  
+  prompt += `\n**Response Style:**
+- Be conversational and natural, not robotic
+- Show empathy and understanding
+- When you have child information, personalize your advice
+- Recommend specific doctors from our database when appropriate
+- Keep responses concise but helpful`;
   
   return prompt;
 }
@@ -159,63 +250,100 @@ async function callAI(messages, familyId) {
 async function generateRuleBasedResponse(messages, familyId) {
   const lastUserMessage = messages[messages.length - 1]?.content?.toLowerCase() || "";
   const childInfo = await getChildInfo(familyId);
+  const doctors = await getAvailableDoctors();
   
-  // Check if we need to ask for child information
+  // Build doctor recommendation text
+  let doctorRecommendation = "";
+  if (doctors.length > 0) {
+    const doctorList = doctors.slice(0, 3).map(doc => {
+      const fullName = `${doc.first_name} ${doc.last_name}`;
+      const specialty = doc.major || 'Pediatrics';
+      return `Dr. ${fullName} (${specialty})`;
+    }).join(", ");
+    doctorRecommendation = `\n\n👨‍⚕️ **Available Doctors:**\nI can connect you with ${doctorList}. Would you like me to recommend one of them?`;
+  }
+  
+  // Check if we need to ask for child information (ask naturally, not like a form)
   if (!childInfo || !childInfo.child_name) {
-    return "Hello! I'm here to help you with your child's health. To provide the best advice, could you please tell me your child's name?";
+    return `Hello! I'm here to help you with your child's health. To give you the best advice, could you tell me a bit about your child? What's their name and how old are they?`;
   }
   
   if (!childInfo.date_of_birth) {
-    return `Thank you, ${childInfo.child_name}! Could you please tell me your child's date of birth or age?`;
+    const nameText = childInfo.child_name ? `, ${childInfo.child_name}` : "";
+    return `Thank you${nameText}! To provide personalized advice, could you tell me your child's age or date of birth?`;
   }
   
   if (!childInfo.gender) {
-    return `Could you please tell me your child's gender?`;
+    const age = childInfo.date_of_birth ? calculateAge(childInfo.date_of_birth) : null;
+    const ageText = age ? ` (${age} years old)` : "";
+    return `I see ${childInfo.child_name}${ageText}. Could you tell me if they're a boy or a girl? This helps me give more specific advice.`;
   }
+  
+  // We have all basic info, provide personalized advice
+  const age = childInfo.date_of_birth ? calculateAge(childInfo.date_of_birth) : null;
+  const ageText = age ? ` (${age} years old)` : "";
+  const childName = childInfo.child_name;
   
   // Provide basic health advice based on keywords
   if (lastUserMessage.includes("fever") || lastUserMessage.includes("发烧")) {
-    return `I understand you're concerned about ${childInfo.child_name}'s fever. Here are some general suggestions:
+    return `I understand you're concerned about ${childName}'s fever${ageText}. Here are some general suggestions:
 
-🩺 What You Can Do:
+🩺 **What You Can Do:**
 • Monitor the temperature regularly
 • Keep your child hydrated with water or electrolyte solutions
 • Ensure they get plenty of rest
 • Use age-appropriate fever reducers if needed (consult a doctor for dosage)
 
-⚠️ When to Seek Medical Attention:
+⚠️ **When to Seek Medical Attention:**
 • Fever persists for more than 3 days
 • Temperature is very high (above 104°F/40°C)
 • Child shows signs of dehydration
 • Child appears very unwell or lethargic
-
-Would you like me to connect you with one of our pediatricians for a consultation?`;
+${doctorRecommendation}`;
   }
   
   if (lastUserMessage.includes("cough") || lastUserMessage.includes("咳嗽")) {
-    return `I understand ${childInfo.child_name} has a cough. Here are some general suggestions:
+    return `I understand ${childName} has a cough${ageText}. Here are some general suggestions:
 
-🩺 What You Can Do:
+🩺 **What You Can Do:**
 • Keep your child hydrated
 • Use a humidifier in their room
 • Ensure they get plenty of rest
 • Avoid irritants like smoke
 
-⚠️ When to Seek Medical Attention:
+⚠️ **When to Seek Medical Attention:**
 • Cough persists for more than a week
 • Child has difficulty breathing
 • Cough is accompanied by high fever
 • Child appears distressed
+${doctorRecommendation}`;
+  }
+  
+  if (lastUserMessage.includes("doctor") || lastUserMessage.includes("医生") || 
+      lastUserMessage.includes("recommend") || lastUserMessage.includes("推荐")) {
+    if (doctors.length > 0) {
+      const doctorList = doctors.slice(0, 3).map((doc, idx) => {
+        const fullName = `${doc.first_name} ${doc.last_name}`;
+        const specialty = doc.major || 'Pediatrics';
+        const location = doc.nation || '';
+        return `${idx + 1}. **Dr. ${fullName}** - ${specialty}${location ? ` (${location})` : ''}`;
+      }).join("\n");
+      return `I'd be happy to recommend a doctor for ${childName}! Here are some excellent pediatricians available on ParentDoctor:
 
-Would you like me to connect you with one of our pediatricians?`;
+${doctorList}
+
+You can view their profiles above and connect with them directly. Would you like me to help you choose one based on your specific needs?`;
+    } else {
+      return `I understand you're looking for a doctor recommendation. Currently, we're building our network of pediatricians. In the meantime, I'm here to help with general health advice. What specific concerns do you have about ${childName}?`;
+    }
   }
   
   // Default response
-  return `I understand your concern about ${childInfo.child_name}. To provide the best advice, could you tell me more about the specific symptoms or concerns you have?`;
+  return `I understand your concern about ${childName}${ageText}. To provide the best advice, could you tell me more about the specific symptoms or concerns you have?${doctorRecommendation}`;
 }
 
 /**
- * Extract child information from conversation
+ * Extract child information from conversation (supports both English and Chinese)
  */
 function extractChildInfo(messages) {
   const info = {
@@ -225,42 +353,66 @@ function extractChildInfo(messages) {
     medical_record: null
   };
   
-  // Combine all messages
-  const fullText = messages.map(m => m.content).join(" ").toLowerCase();
+  // Combine all messages (keep original case for name extraction)
+  const fullText = messages.map(m => m.content).join(" ");
+  const lowerText = fullText.toLowerCase();
   
-  // Extract name (look for patterns like "my child is named X" or "X is my child")
-  const namePatterns = [
-    /(?:my child|child|kid|baby|son|daughter) (?:is|named|called) ([a-z]+)/i,
-    /(?:name is|named) ([a-z]+)/i
+  // Extract name (supports English and Chinese)
+  // English patterns
+  const namePatternsEn = [
+    /(?:my child|child|kid|baby|son|daughter) (?:is|named|called|name is) ([a-z\u4e00-\u9fa5]+)/i,
+    /(?:name is|named|called) ([a-z\u4e00-\u9fa5]+)/i,
+    /(?:他|她|孩子|宝宝|儿子|女儿) (?:叫|名字是|名字叫) ([a-z\u4e00-\u9fa5]+)/i,
+    /(?:叫|名字是|名字叫) ([a-z\u4e00-\u9fa5]+)/i
   ];
   
-  for (const pattern of namePatterns) {
+  for (const pattern of namePatternsEn) {
     const match = fullText.match(pattern);
-    if (match && match[1]) {
-      info.child_name = match[1].charAt(0).toUpperCase() + match[1].slice(1);
+    if (match && match[1] && match[1].length >= 1 && match[1].length <= 20) {
+      // Capitalize first letter for English names, keep Chinese as is
+      const name = match[1];
+      info.child_name = /^[a-z]/.test(name) ? name.charAt(0).toUpperCase() + name.slice(1) : name;
       break;
     }
   }
   
-  // Extract date of birth or age
+  // Extract date of birth or age (supports multiple formats)
   const dobPatterns = [
-    /(?:born|birthday|date of birth|dob) (?:on|is)? (\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})/i,
-    /(\d+) (?:years?|months?|days?) old/i,
-    /age (?:is|of) (\d+)/i
+    // Date formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY
+    /(?:born|birthday|date of birth|dob|出生|生日) (?:on|is|是|在)?\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})/i,
+    /(\d{4}[-/]\d{1,2}[-/]\d{1,2})/,
+    // Age patterns
+    /(?:age|年龄) (?:is|of|是)?\s*(\d+)/i,
+    /(\d+) (?:years?|months?|days?|岁|个月|天) (?:old|age)?/i,
+    /(?:今年|现在) (\d+) (?:岁|years? old)/i,
+    /(\d+) (?:岁|years? old)/i
   ];
   
   for (const pattern of dobPatterns) {
     const match = fullText.match(pattern);
     if (match && match[1]) {
-      info.date_of_birth = match[1];
+      const value = match[1];
+      // If it's an age, convert to approximate date of birth
+      if (/^\d+$/.test(value) && parseInt(value) < 25) {
+        const age = parseInt(value);
+        const today = new Date();
+        const birthYear = today.getFullYear() - age;
+        // Use January 1st as approximate date
+        info.date_of_birth = `${birthYear}-01-01`;
+      } else if (value.includes('-') || value.includes('/')) {
+        // It's a date
+        info.date_of_birth = value.replace(/\//g, '-');
+      }
       break;
     }
   }
   
-  // Extract gender
-  if (fullText.includes("boy") || fullText.includes("son") || fullText.includes("male")) {
+  // Extract gender (supports English and Chinese)
+  if (lowerText.includes("boy") || lowerText.includes("son") || lowerText.includes("male") || 
+      lowerText.includes("男孩") || lowerText.includes("儿子") || lowerText.includes("男")) {
     info.gender = "male";
-  } else if (fullText.includes("girl") || fullText.includes("daughter") || fullText.includes("female")) {
+  } else if (lowerText.includes("girl") || lowerText.includes("daughter") || lowerText.includes("female") ||
+             lowerText.includes("女孩") || lowerText.includes("女儿") || lowerText.includes("女")) {
     info.gender = "female";
   }
   
@@ -356,10 +508,19 @@ async function handleChatMessage(familyId, userMessage) {
     // Extract child information from conversation
     const extractedInfo = extractChildInfo(history);
     
-    // Save child information if we have new data
+    // Get current child info from database
     const childInfo = await getChildInfo(familyId);
-    let hasNewInfo = false;
     
+    // Merge extracted info with existing info (extracted info takes priority for new fields)
+    const mergedInfo = {
+      child_name: extractedInfo.child_name || childInfo?.child_name || null,
+      date_of_birth: extractedInfo.date_of_birth || childInfo?.date_of_birth || null,
+      gender: extractedInfo.gender || childInfo?.gender || null,
+      medical_record: extractedInfo.medical_record || childInfo?.medical_record || null
+    };
+    
+    // Check if we have any new information to save
+    let hasNewInfo = false;
     if (extractedInfo.child_name && (!childInfo || !childInfo.child_name)) {
       hasNewInfo = true;
     }
@@ -370,8 +531,10 @@ async function handleChatMessage(familyId, userMessage) {
       hasNewInfo = true;
     }
     
-    if (hasNewInfo) {
-      await saveChildInfo(familyId, extractedInfo);
+    // Save if we have at least one piece of new information
+    if (hasNewInfo && (mergedInfo.child_name || mergedInfo.date_of_birth || mergedInfo.gender)) {
+      await saveChildInfo(familyId, mergedInfo);
+      console.log(`✅ Saved/updated child info:`, mergedInfo);
     }
     
     return {
