@@ -554,6 +554,14 @@ async function saveChildInfo(familyId, childInfo) {
       return;
     }
     
+    // Log what we're trying to save
+    console.log(`💾 Attempting to save child info for family ${familyId}:`, {
+      child_name: childInfo.child_name || 'null',
+      date_of_birth: childInfo.date_of_birth || 'null',
+      gender: childInfo.gender || 'null',
+      medical_record: childInfo.medical_record || 'null'
+    });
+    
     // Check if child already exists for this family
     // We check by family_id only, since we want to update the same child record
     const { rows: existing } = await pool.query(
@@ -565,8 +573,8 @@ async function saveChildInfo(familyId, childInfo) {
     );
     
     if (existing.length > 0) {
-      // Update existing
-      await pool.query(
+      // Update existing - update even if only one field has a value
+      const updateResult = await pool.query(
         `UPDATE child 
          SET child_name = COALESCE($1, child_name),
              date_of_birth = COALESCE($2, date_of_birth),
@@ -582,13 +590,14 @@ async function saveChildInfo(familyId, childInfo) {
           existing[0].id
         ]
       );
-      console.log(`✅ Updated child info for family ${familyId}`);
+      console.log(`✅ Updated child info for family ${familyId} (ID: ${existing[0].id}), rows affected: ${updateResult.rowCount}`);
     } else {
-      // Insert new - only insert if we have at least one piece of information
+      // Insert new - insert even if only one field has a value
       if (childInfo.child_name || childInfo.date_of_birth || childInfo.gender || childInfo.medical_record) {
-        await pool.query(
+        const insertResult = await pool.query(
           `INSERT INTO child (family_id, child_name, date_of_birth, gender, medical_record, extracted_from_chat)
-           VALUES ($1, $2, $3, $4, $5, TRUE)`,
+           VALUES ($1, $2, $3, $4, $5, TRUE)
+           RETURNING id`,
           [
             familyId,
             childInfo.child_name,
@@ -597,7 +606,7 @@ async function saveChildInfo(familyId, childInfo) {
             childInfo.medical_record
           ]
         );
-        console.log(`✅ Saved child info for family ${familyId}`);
+        console.log(`✅ Created new child record for family ${familyId} (ID: ${insertResult.rows[0].id})`);
       } else {
         console.log(`⚠️  Skipping save: no child information to save for family ${familyId}`);
       }
@@ -606,6 +615,7 @@ async function saveChildInfo(familyId, childInfo) {
     console.error("❌ Error saving child info:", err.message);
     console.error("❌ Error stack:", err.stack);
     // Don't throw - allow the chat to continue even if save fails
+    throw err; // Actually throw it so we can see the error in logs
   }
 }
 
